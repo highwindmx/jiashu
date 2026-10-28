@@ -278,7 +278,7 @@
   </div>
 </div>
 
-<div class="build-badge" id="buildBadge" data-build="build 2026-10-28 14:56 · 2e57e70 · v3-panorama" title="点击复制诊断信息">build 2026-10-28 14:56 · 2e57e70 · v3-panorama</div>
+<div class="build-badge" id="buildBadge" data-build="build 2026-10-28 15:07 · 8b6aa94 · v3-panorama" title="点击复制诊断信息">build 2026-10-28 15:07 · 8b6aa94 · v3-panorama</div>
 <div class="toast" id="toast"></div>
 <div class="nodemenu" id="nodeMenu" style="display:none"></div>
 
@@ -816,7 +816,8 @@
   var viewMode = 'tree';   // 'tree' | 'net'
   var view = { k: 1, tx: 0, ty: 0 };
   var netPos = {};         // id -> {x,y}  网图手动拖拽位置（覆盖力导向结果）
-  var treeOffset = {};     // id -> dx     树形同代内的水平偏移
+  var treeOffset = {};     // id -> dx     树形「用户意图锚点」偏移（只有直接拖动才写入，让位结果不写入）
+  var treeDrag = null;     // 拖拽中：{ id, rowY, want:{id:x}, base:{id:x}, display:{id:x} }
   var netLayoutCache = null; // 力导向布局缓存，避免拖拽时每帧重算导致抖动
 
   // 手动布局持久化：网图拖拽位置 + 树形水平偏移分别存盘，刷新后保留
@@ -859,6 +860,8 @@
       var dx = treeOffset[n.id];
       if (dx) n.x += dx;
     });
+    // 拖拽中：按「拖动者钉住 + 其余单向让位」重算本代显示位置（临时层，松手才落盘）
+    applyTreeDragPack(layout);
     lastLayout = layout;
     var conn = buildConnectors(layout);
 
@@ -1154,51 +1157,68 @@
     applyView();
   }
 
-  // 树形：拖动某节点后，同一世代的其他节点自动让位。
-  // 采用确定性 1D 区间打包（Observable Plot dodge / Force-Scan 思路）：
-  //   拖动者钉死不动，其余按当前期望位置排序，向「远离拖动者」的单方向做最小位移让位，
-  //   绝不把左侧节点推到右侧，也不会两个方向互相推挤 → 不会团聚、结果可重复（幂等）。
-  function resolveTreeRowDodge(draggedId) {
-    var base = computeLayout();          // 纯自动布局，不含手动偏移（避免偏移重复累加）
-    var dragged = null;
-    base.nodes.forEach(function (n) { if (n.id === draggedId) dragged = n; });
-    if (!dragged) return;
+  /* ---- 树形同代拖动：拖动者跟手 + 其余按 1D 区间打包单向让位（Observable Plot dodge / Force-Scan 思路）----
+     关键：让位结果是「临时显示层」，不写回 treeOffset。否则被推开的卡片会把「被推开后的位置」
+     当成新锚点，拖动者永远追不上它 → 无法越过同辈成员。松手时才把显示位置一次性提交为锚点。 */
 
-    var GAP = 14;
-    var row = base.nodes
-      .filter(function (n) { return Math.abs(n.y - dragged.y) < 1; })
-      .map(function (n) {
-        return { id: n.id, base: n.x, want: n.x + (treeOffset[n.id] || 0), fixed: n.id === draggedId };
-      })
-      .sort(function (a, b) { return a.want - b.want; });
+  var TREE_GAP = 14;
 
+  function beginTreeDrag(id) {
+    var base = computeLayout();
+    var rowY = null;
+    base.nodes.forEach(function (n) { if (n.id === id) rowY = n.y; });
+    if (rowY === null) return false;
+    treeDrag = { id: id, rowY: rowY, want: {}, base: {}, display: {} };
+    base.nodes.forEach(function (n) {
+      if (Math.abs(n.y - rowY) >= 1) return;
+      treeDrag.base[n.id] = n.x;
+      treeDrag.want[n.id] = n.x + (treeOffset[n.id] || 0);   // 拖拽期锚点快照（不含本次让位结果）
+    });
+    return true;
+  }
+
+  // 按当前 want 排序后打包：拖动者钉在 want 处，右侧只许右推、左侧只许左推
+  function applyTreeDragPack(layout) {
+    if (!treeDrag) return;
+    var arr = layout.nodes.filter(function (n) {
+      return Math.abs(n.y - treeDrag.rowY) < 1 && treeDrag.want[n.id] !== undefined;
+    });
+    if (!arr.length) return;
+    arr.sort(function (a, b) { return treeDrag.want[a.id] - treeDrag.want[b.id]; });
     var i0 = -1;
-    for (var i = 0; i < row.length; i++) if (row[i].fixed) { i0 = i; break; }
+    for (var i = 0; i < arr.length; i++) if (arr[i].id === treeDrag.id) { i0 = i; break; }
     if (i0 < 0) return;
 
-    var placed = {};
-    placed[row[i0].id] = row[i0].want;   // 拖动者保持用户放下的位置
-
-    // 右侧：只允许向右推
-    var limit = row[i0].want + CARD_W + GAP;
-    for (var j = i0 + 1; j < row.length; j++) {
-      placed[row[j].id] = Math.max(row[j].want, limit);
-      limit = placed[row[j].id] + CARD_W + GAP;
+    arr[i0].x = treeDrag.want[arr[i0].id];                 // 拖动者跟手
+    var limit = arr[i0].x + CARD_W + TREE_GAP;
+    for (var j = i0 + 1; j < arr.length; j++) {
+      arr[j].x = Math.max(treeDrag.want[arr[j].id], limit);
+      limit = arr[j].x + CARD_W + TREE_GAP;
     }
-    // 左侧：只允许向左推
-    limit = row[i0].want - CARD_W - GAP;
+    limit = arr[i0].x - CARD_W - TREE_GAP;
     for (var k = i0 - 1; k >= 0; k--) {
-      placed[row[k].id] = Math.min(row[k].want, limit);
-      limit = placed[row[k].id] - CARD_W - GAP;
+      arr[k].x = Math.min(treeDrag.want[arr[k].id], limit);
+      limit = arr[k].x - CARD_W - TREE_GAP;
     }
+    treeDrag.display = {};
+    arr.forEach(function (n) { treeDrag.display[n.id] = n.x; });
+  }
 
-    row.forEach(function (it) {
-      if (it.fixed) return;              // 拖动者的偏移已由 moveNode 累加
-      var off = placed[it.id] - it.base;
-      if (Math.abs(off) < 0.5) delete treeOffset[it.id];
-      else treeOffset[it.id] = off;
-    });
-    renderTree();
+  // 松手：把本代最终显示位置提交为锚点（偏移 = 显示位置 - 自动布局位置）
+  function endTreeDrag() {
+    if (!treeDrag) return false;
+    var tg = treeDrag;
+    treeDrag = null;
+    if (tg.display) {
+      computeLayout().nodes.forEach(function (n) {
+        var bx = tg.base[n.id];
+        if (bx === undefined) return;
+        var dx = (tg.display[n.id] !== undefined ? tg.display[n.id] : bx) - bx;
+        if (Math.abs(dx) < 0.5) delete treeOffset[n.id];
+        else treeOffset[n.id] = dx;
+      });
+    }
+    return true;
   }
 
   // 网图：拖动某节点后，附近重叠节点自动避让。
@@ -1272,8 +1292,11 @@
       dodgeNetAround(id);
       renderNetView();
     } else {
-      treeOffset[id] = (treeOffset[id] || 0) + dxc;
-      resolveTreeRowDodge(id);
+      if (!treeDrag || treeDrag.id !== id) {
+        if (!beginTreeDrag(id)) return;
+      }
+      treeDrag.want[id] += dxc;   // 只改拖动者自己的锚点 → 可以越过同辈
+      renderTree();
     }
   }
 
@@ -2159,7 +2182,7 @@
       drag = null;
       canvas.classList.remove('dragging');
       if (wasDrag) {
-        if (wasNode) saveManualLayout();
+        if (wasNode) { endTreeDrag(); saveManualLayout(); }
         suppressClick = true; setTimeout(function () { suppressClick = false; }, 0);
       }
     });
@@ -2229,7 +2252,7 @@
     }, { passive: false });
     canvas.addEventListener('touchend', function (e) {
       if (e.touches.length === 0) {
-        if (touchState && touchState.mode === 'node') saveManualLayout();
+        if (touchState && touchState.mode === 'node') { endTreeDrag(); saveManualLayout(); }
         touchState = null;
       } else if (e.touches.length === 1) {
         var t = e.touches[0];
@@ -2311,7 +2334,7 @@
 
     document.getElementById('btn-add-root').addEventListener('click', showAddRoot);
     document.getElementById('btn-relayout').addEventListener('click', function () {
-      netPos = {}; treeOffset = {}; netLayoutCache = null;
+      netPos = {}; treeOffset = {}; netLayoutCache = null; treeDrag = null;
       saveManualLayout();
       renderAll({ fit: true });
       toast('已重新布局（清除手动调整）');
