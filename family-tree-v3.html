@@ -278,7 +278,7 @@
   </div>
 </div>
 
-<div class="build-badge" id="buildBadge" data-build="build 2026-10-28 14:21 · bb0b073 · v3-panorama" title="点击复制诊断信息">build 2026-10-28 14:21 · bb0b073 · v3-panorama</div>
+<div class="build-badge" id="buildBadge" data-build="build 2026-10-28 14:42 · c491434 · v3-panorama" title="点击复制诊断信息">build 2026-10-28 14:42 · c491434 · v3-panorama</div>
 <div class="toast" id="toast"></div>
 <div class="nodemenu" id="nodeMenu" style="display:none"></div>
 
@@ -593,6 +593,7 @@
 
   /* ================= 布局 ================= */
   var CARD_W = 112, CARD_H = 44;
+  var NET_SENIOR_COLOR = '#2f8f5b';   // 网图「长幼/亲子」线色（性别中立的绿，不用男性蓝）
   var GAP_X = CARD_W + 22;      // 同代最小间距（含卡片宽）
   var ROW_H = 122;
   var PAD = 46;
@@ -1031,9 +1032,18 @@
     return { nodes: nodes, gen: gen, w: (maxX - minX) + CARD_W + PAD * 2, h: (maxY - minY) + CARD_H + PAD * 2, rows: 1 };
   }
 
-  function netEdge(a, b, color, w, dash) {
+  function netEdge(a, b, color, w, dash, marker) {
     return '<line x1="' + (a.x + CARD_W / 2) + '" y1="' + (a.y + CARD_H / 2) + '" x2="' + (b.x + CARD_W / 2) + '" y2="' + (b.y + CARD_H / 2)
-      + '" stroke="' + color + '" stroke-width="' + w + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + ' stroke-linecap="round"></line>';
+      + '" stroke="' + color + '" stroke-width="' + w + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '')
+      + (marker ? ' marker-end="url(#' + marker + ')"' : '') + ' stroke-linecap="round"></line>';
+  }
+
+  // 长幼（亲子）连线：止于子节点顶部，箭头指向子代（长辈→晚辈），颜色为性别中立的绿
+  function netEdgeSenior(a, b) {
+    var x1 = a.x + CARD_W / 2, y1 = a.y + CARD_H / 2;
+    var x2 = b.x + CARD_W / 2, y2 = b.y;
+    return '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2
+      + '" stroke="' + NET_SENIOR_COLOR + '" stroke-width="1.6" marker-end="url(#netArrow)" stroke-linecap="round"></line>';
   }
 
   function getNetLayout() {
@@ -1062,7 +1072,7 @@
     lastLayout = layout;
     var byId = {};
     layout.nodes.forEach(function (m) { byId[m.id] = m; });
-    var out = [];
+    var out = ['<defs><marker id="netArrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="' + NET_SENIOR_COLOR + '"></path></marker></defs>'];
     // 继亲：虚线（最后画，置于底层）
     persons.forEach(function (c) {
       (c.stepParents || []).forEach(function (pid) {
@@ -1080,12 +1090,12 @@
         out.push(netEdge(a, b, '#c1c7d0', 1.8, null));
       });
     });
-    // 亲子：蓝实线（血缘主线，置于上层）
+    // 亲子：绿箭头线（长辈→晚辈，性别中立色，置于上层）
     persons.forEach(function (c) {
       var b = byId[c.id]; if (!b) return;
       (c.parents || []).forEach(function (pid) {
         var a = byId[pid]; if (!a) return;
-        out.push(netEdge(a, b, '#2f6fed', 1.6, null));
+        out.push(netEdgeSenior(a, b));
       });
     });
     // 卡片
@@ -1094,7 +1104,7 @@
     svg.removeAttribute('viewBox');
     svg.setAttribute('width', '100%');
     svg.setAttribute('height', '100%');
-    stat.textContent = '共 ' + persons.length + ' 人 · 网图（可拖动节点 · 蓝=亲子 灰=配偶 虚线=继亲）';
+    stat.textContent = '共 ' + persons.length + ' 人 · 网图（可拖动节点 · 绿箭头=亲子/长幼 灰=配偶 虚线=继亲）';
     applyView();
   }
 
@@ -1119,6 +1129,70 @@
     applyView();
   }
 
+  // 树形：拖动某节点后，同一世代的其他节点自动避让（向两侧推开），避免重叠
+  function resolveTreeRowDodge(draggedId) {
+    if (!lastLayout) return;
+    var node = null;
+    lastLayout.nodes.forEach(function (n) { if (n.id === draggedId) node = n; });
+    if (!node) return;
+    var GAP = 12;
+    function cx(n) { return n.x + (treeOffset[n.id] || 0); }
+    function pass(dir) {
+      var arr = lastLayout.nodes.filter(function (n) { return n.id !== draggedId && Math.abs(n.y - node.y) < 1; });
+      arr.sort(function (a, b) { return dir > 0 ? cx(a) - cx(b) : cx(b) - cx(a); });
+      if (dir > 0) {
+        var lastRight = cx(node) + CARD_W / 2;
+        arr.forEach(function (n) {
+          var left = cx(n) - CARD_W / 2;
+          if (left < lastRight + GAP) {
+            treeOffset[n.id] = (treeOffset[n.id] || 0) + ((lastRight + GAP) - left);
+            lastRight = cx(n) + CARD_W / 2;
+          } else lastRight = cx(n) + CARD_W / 2;
+        });
+      } else {
+        var lastLeft = cx(node) - CARD_W / 2;
+        arr.forEach(function (n) {
+          var right = cx(n) + CARD_W / 2;
+          if (right > lastLeft - GAP) {
+            treeOffset[n.id] = (treeOffset[n.id] || 0) + ((lastLeft - GAP) - right);
+            lastLeft = cx(n) - CARD_W / 2;
+          } else lastLeft = cx(n) - CARD_W / 2;
+        });
+      }
+    }
+    for (var i = 0; i < 5; i++) { pass(1); pass(-1); }
+    renderTree();
+  }
+
+  // 网图：拖动某节点后，附近重叠的节点自动避让（沿径向推开）
+  function dodgeNetAround(draggedId) {
+    var layout = getNetLayout();
+    var A = netPos[draggedId];
+    if (!A) {
+      var dn = null;
+      layout.nodes.forEach(function (n) { if (n.id === draggedId) dn = n; });
+      if (!dn) return;
+      A = netPos[draggedId] = { x: dn.x, y: dn.y };
+    }
+    var minDist = CARD_W + 26;
+    persons.forEach(function (p) {
+      if (p.id === draggedId) return;
+      var cur = netPos[p.id];
+      var base = null;
+      layout.nodes.forEach(function (n) { if (n.id === p.id) base = n; });
+      var bx = cur ? cur.x : (base ? base.x : null);
+      var by = cur ? cur.y : (base ? base.y : null);
+      if (bx === null) return;
+      var dx = bx - A.x, dy = by - A.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < minDist) {
+        if (!cur) cur = netPos[p.id] = { x: bx, y: by };
+        if (dist < 0.001) { cur.x = A.x + minDist; cur.y = A.y; }
+        else { var push = minDist - dist; cur.x += (dx / dist) * push; cur.y += (dy / dist) * push; }
+      }
+    });
+  }
+
   // 拖动单个节点：网图自由(x,y)；树形仅水平(dx)，纵向锁定在当前世代
   function moveNode(id, dxc, dyc) {
     if (viewMode === 'net') {
@@ -1129,10 +1203,11 @@
       if (!netPos[id]) netPos[id] = { x: node.x, y: node.y };
       netPos[id].x += dxc;
       netPos[id].y += dyc;
+      dodgeNetAround(id);
       renderNetView();
     } else {
       treeOffset[id] = (treeOffset[id] || 0) + dxc;
-      renderTree();
+      resolveTreeRowDodge(id);
     }
   }
 

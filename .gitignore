@@ -5,6 +5,7 @@ family-tree-*.json
 node_modules/
 .tmp/
 .workbuddy/
+archive/
 
 # 编辑器 / 系统
 .DS_Store
