@@ -51,6 +51,12 @@
   #treeSvg .tnode:hover .box, #treeSvg .tnode.sel .box { stroke-width: 2.6; }
   #treeSvg .tnode:hover .box { filter: drop-shadow(0 3px 8px rgba(47,111,237,.22)); }
   #treeSvg .tnode text { user-select: none; pointer-events: none; }
+  /* 拖动中：卡片「抬起」——投影 + 加粗描边，明确当前正在移动哪一张 */
+  #treeSvg .tnode.dragging { cursor: grabbing; }
+  #treeSvg .tnode.dragging .box {
+    stroke-width: 2.8;
+    filter: drop-shadow(0 10px 18px rgba(31,35,41,.28));
+  }
   .zoombar {
     position: absolute; right: 10px; top: 10px; display: flex; align-items: center; gap: 4px;
     background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 8px;
@@ -216,6 +222,7 @@
           <button data-view="net">网图</button>
         </span>
         <button class="ghost mini" id="btn-add-root">＋ 添加成员</button>
+        <button class="ghost mini" id="btn-tidy" title="按当前顺序重排：长辈居中于子辈、压掉多余间距">整理对齐</button>
         <button class="ghost mini" id="btn-relayout">重新布局</button>
       </div>
     </div>
@@ -238,7 +245,7 @@
         <span><i class="ls"></i>继亲</span>
       </div>
     </div>
-    <div class="hint" style="margin-top:8px">点任意成员卡片 → 添加子女 / 配偶 / 父母 / 继父母 / 编辑 / 删除。已故成员请勾选「已故」并填卒年。<br>左侧「第N代」为世代标签；<b>同色连线＝同一对父母的子女</b>；彩色虚线弧＝随配偶移走的子女连回其亲生父母；灰色虚线＝继亲。</div>
+    <div class="hint" style="margin-top:8px">点任意成员卡片 → 添加子女 / 配偶 / 父母 / 继父母 / 编辑 / 删除。已故成员请勾选「已故」并填卒年。<br>左侧「第N代」为世代标签；<b>同色连线＝同一对父母的子女</b>；彩色虚线弧＝随配偶移走的子女连回其亲生父母；灰色虚线＝继亲。<br>手动拖动排好顺序后，点<b>「整理对齐」</b>即可按当前顺序重排：长辈回到子辈中间、多余间距自动压掉。</div>
   </div>
 
   <div class="card">
