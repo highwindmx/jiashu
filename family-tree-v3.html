@@ -278,7 +278,7 @@
   </div>
 </div>
 
-<div class="build-badge" id="buildBadge" data-build="build 2026-10-28 14:42 · c491434 · v3-panorama" title="点击复制诊断信息">build 2026-10-28 14:42 · c491434 · v3-panorama</div>
+<div class="build-badge" id="buildBadge" data-build="build 2026-10-28 14:56 · 2e57e70 · v3-panorama" title="点击复制诊断信息">build 2026-10-28 14:56 · 2e57e70 · v3-panorama</div>
 <div class="toast" id="toast"></div>
 <div class="nodemenu" id="nodeMenu" style="display:none"></div>
 
@@ -1032,18 +1032,43 @@
     return { nodes: nodes, gen: gen, w: (maxX - minX) + CARD_W + PAD * 2, h: (maxY - minY) + CARD_H + PAD * 2, rows: 1 };
   }
 
+  // 沿单位方向 (ux,uy) 从卡片中心到「外扩 pad 的矩形」边界的距离
+  function rectHit(ux, uy, pad) {
+    var hx = CARD_W / 2 + (pad || 0), hy = CARD_H / 2 + (pad || 0);
+    var tx = Math.abs(ux) < 1e-6 ? Infinity : hx / Math.abs(ux);
+    var ty = Math.abs(uy) < 1e-6 ? Infinity : hy / Math.abs(uy);
+    return Math.min(tx, ty);
+  }
+
+  // 线段贴边裁剪（参考 ggraph 的 start_cap / end_cap、ggnet2 的 arrow.gap）：
+  // 端点落在「卡片外扩 gap 的矩形」上，保证离卡片边框恒定 ≥ gap（斜向也不塌），
+  // 卡片遮不住箭头，多个父母也从不同方位抵达，不再挤在节点同一点。
+  function edgePoints(a, b, gapA, gapB) {
+    var ax = a.x + CARD_W / 2, ay = a.y + CARD_H / 2;
+    var bx = b.x + CARD_W / 2, by = b.y + CARD_H / 2;
+    var dx = bx - ax, dy = by - ay;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1e-3) return { x1: ax, y1: ay, x2: bx, y2: by };
+    var ux = dx / len, uy = dy / len;
+    var tA = rectHit(ux, uy, gapA);
+    var tB = rectHit(-ux, -uy, gapB);
+    if (len - (tA + tB) < 8) { tA = len * 0.35; tB = len * 0.35; }  // 两卡过近：等比截取，避免线反向
+    return {
+      x1: ax + ux * tA, y1: ay + uy * tA,
+      x2: bx - ux * tB, y2: by - uy * tB
+    };
+  }
+
   function netEdge(a, b, color, w, dash, marker) {
-    return '<line x1="' + (a.x + CARD_W / 2) + '" y1="' + (a.y + CARD_H / 2) + '" x2="' + (b.x + CARD_W / 2) + '" y2="' + (b.y + CARD_H / 2)
+    var p = edgePoints(a, b, 1, marker ? 8 : 1);
+    return '<line x1="' + p.x1 + '" y1="' + p.y1 + '" x2="' + p.x2 + '" y2="' + p.y2
       + '" stroke="' + color + '" stroke-width="' + w + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '')
       + (marker ? ' marker-end="url(#' + marker + ')"' : '') + ' stroke-linecap="round"></line>';
   }
 
-  // 长幼（亲子）连线：止于子节点顶部，箭头指向子代（长辈→晚辈），颜色为性别中立的绿
+  // 长幼（亲子）连线：贴子节点边框外 8px 收尾，箭头指向子代（长辈→晚辈），性别中立绿
   function netEdgeSenior(a, b) {
-    var x1 = a.x + CARD_W / 2, y1 = a.y + CARD_H / 2;
-    var x2 = b.x + CARD_W / 2, y2 = b.y;
-    return '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2
-      + '" stroke="' + NET_SENIOR_COLOR + '" stroke-width="1.6" marker-end="url(#netArrow)" stroke-linecap="round"></line>';
+    return netEdge(a, b, NET_SENIOR_COLOR, 1.6, null, 'netArrow');
   }
 
   function getNetLayout() {
@@ -1072,7 +1097,7 @@
     lastLayout = layout;
     var byId = {};
     layout.nodes.forEach(function (m) { byId[m.id] = m; });
-    var out = ['<defs><marker id="netArrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="' + NET_SENIOR_COLOR + '"></path></marker></defs>'];
+    var out = ['<defs><marker id="netArrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="' + NET_SENIOR_COLOR + '"></path></marker></defs>'];
     // 继亲：虚线（最后画，置于底层）
     persons.forEach(function (c) {
       (c.stepParents || []).forEach(function (pid) {
@@ -1129,42 +1154,56 @@
     applyView();
   }
 
-  // 树形：拖动某节点后，同一世代的其他节点自动避让（向两侧推开），避免重叠
+  // 树形：拖动某节点后，同一世代的其他节点自动让位。
+  // 采用确定性 1D 区间打包（Observable Plot dodge / Force-Scan 思路）：
+  //   拖动者钉死不动，其余按当前期望位置排序，向「远离拖动者」的单方向做最小位移让位，
+  //   绝不把左侧节点推到右侧，也不会两个方向互相推挤 → 不会团聚、结果可重复（幂等）。
   function resolveTreeRowDodge(draggedId) {
-    if (!lastLayout) return;
-    var node = null;
-    lastLayout.nodes.forEach(function (n) { if (n.id === draggedId) node = n; });
-    if (!node) return;
-    var GAP = 12;
-    function cx(n) { return n.x + (treeOffset[n.id] || 0); }
-    function pass(dir) {
-      var arr = lastLayout.nodes.filter(function (n) { return n.id !== draggedId && Math.abs(n.y - node.y) < 1; });
-      arr.sort(function (a, b) { return dir > 0 ? cx(a) - cx(b) : cx(b) - cx(a); });
-      if (dir > 0) {
-        var lastRight = cx(node) + CARD_W / 2;
-        arr.forEach(function (n) {
-          var left = cx(n) - CARD_W / 2;
-          if (left < lastRight + GAP) {
-            treeOffset[n.id] = (treeOffset[n.id] || 0) + ((lastRight + GAP) - left);
-            lastRight = cx(n) + CARD_W / 2;
-          } else lastRight = cx(n) + CARD_W / 2;
-        });
-      } else {
-        var lastLeft = cx(node) - CARD_W / 2;
-        arr.forEach(function (n) {
-          var right = cx(n) + CARD_W / 2;
-          if (right > lastLeft - GAP) {
-            treeOffset[n.id] = (treeOffset[n.id] || 0) + ((lastLeft - GAP) - right);
-            lastLeft = cx(n) - CARD_W / 2;
-          } else lastLeft = cx(n) - CARD_W / 2;
-        });
-      }
+    var base = computeLayout();          // 纯自动布局，不含手动偏移（避免偏移重复累加）
+    var dragged = null;
+    base.nodes.forEach(function (n) { if (n.id === draggedId) dragged = n; });
+    if (!dragged) return;
+
+    var GAP = 14;
+    var row = base.nodes
+      .filter(function (n) { return Math.abs(n.y - dragged.y) < 1; })
+      .map(function (n) {
+        return { id: n.id, base: n.x, want: n.x + (treeOffset[n.id] || 0), fixed: n.id === draggedId };
+      })
+      .sort(function (a, b) { return a.want - b.want; });
+
+    var i0 = -1;
+    for (var i = 0; i < row.length; i++) if (row[i].fixed) { i0 = i; break; }
+    if (i0 < 0) return;
+
+    var placed = {};
+    placed[row[i0].id] = row[i0].want;   // 拖动者保持用户放下的位置
+
+    // 右侧：只允许向右推
+    var limit = row[i0].want + CARD_W + GAP;
+    for (var j = i0 + 1; j < row.length; j++) {
+      placed[row[j].id] = Math.max(row[j].want, limit);
+      limit = placed[row[j].id] + CARD_W + GAP;
     }
-    for (var i = 0; i < 5; i++) { pass(1); pass(-1); }
+    // 左侧：只允许向左推
+    limit = row[i0].want - CARD_W - GAP;
+    for (var k = i0 - 1; k >= 0; k--) {
+      placed[row[k].id] = Math.min(row[k].want, limit);
+      limit = placed[row[k].id] - CARD_W - GAP;
+    }
+
+    row.forEach(function (it) {
+      if (it.fixed) return;              // 拖动者的偏移已由 moveNode 累加
+      var off = placed[it.id] - it.base;
+      if (Math.abs(off) < 0.5) delete treeOffset[it.id];
+      else treeOffset[it.id] = off;
+    });
     renderTree();
   }
 
-  // 网图：拖动某节点后，附近重叠的节点自动避让（沿径向推开）
+  // 网图：拖动某节点后，附近重叠节点自动避让。
+  // 参考 d3-force 的 forceCollide：先绕拖动者径向推开，再做 2 轮有界成对分离，
+  // 避免「被推开的节点彼此又叠上」，同时不改动整图布局（只给受影响的节点建覆盖）。
   function dodgeNetAround(draggedId) {
     var layout = getNetLayout();
     var A = netPos[draggedId];
@@ -1174,23 +1213,50 @@
       if (!dn) return;
       A = netPos[draggedId] = { x: dn.x, y: dn.y };
     }
-    var minDist = CARD_W + 26;
-    persons.forEach(function (p) {
-      if (p.id === draggedId) return;
-      var cur = netPos[p.id];
-      var base = null;
-      layout.nodes.forEach(function (n) { if (n.id === p.id) base = n; });
-      var bx = cur ? cur.x : (base ? base.x : null);
-      var by = cur ? cur.y : (base ? base.y : null);
-      if (bx === null) return;
-      var dx = bx - A.x, dy = by - A.y;
+    var minDist = CARD_W + 30;   // 卡片宽 + 呼吸间距
+    var moved = {};
+
+    // 1) 绕拖动者径向推开
+    layout.nodes.forEach(function (n) {
+      if (n.id === draggedId) return;
+      var o = netPos[n.id] || { x: n.x, y: n.y };
+      var dx = o.x - A.x, dy = o.y - A.y;
       var dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < minDist) {
-        if (!cur) cur = netPos[p.id] = { x: bx, y: by };
-        if (dist < 0.001) { cur.x = A.x + minDist; cur.y = A.y; }
-        else { var push = minDist - dist; cur.x += (dx / dist) * push; cur.y += (dy / dist) * push; }
+      if (dist >= minDist) return;
+      if (!netPos[n.id]) netPos[n.id] = { x: o.x, y: o.y };
+      if (dist < 0.001) { netPos[n.id].x = A.x + minDist; netPos[n.id].y = A.y; }
+      else {
+        var push = minDist - dist;
+        netPos[n.id].x = o.x + (dx / dist) * push;
+        netPos[n.id].y = o.y + (dy / dist) * push;
       }
+      moved[n.id] = 1;
     });
+
+    // 2) 有界成对分离：只处理本次被推动的节点，避免连锁扩张整张图
+    for (var it = 0; it < 2; it++) {
+      Object.keys(moved).forEach(function (id) {
+        var c = netPos[id];
+        if (!c) return;
+        layout.nodes.forEach(function (n) {
+          if (n.id === id) return;
+          var o = netPos[n.id] || { x: n.x, y: n.y };
+          var dx = c.x - o.x, dy = c.y - o.y;
+          var d = Math.sqrt(dx * dx + dy * dy);
+          if (d >= minDist || d < 0.001) return;
+          var need = minDist - d;
+          if (n.id === draggedId) {           // 对方是拖动者（钉死）：自己全额退让
+            c.x += (dx / d) * need; c.y += (dy / d) * need;
+          } else {                             // 双方各退一半
+            var half = need / 2;
+            c.x += (dx / d) * half; c.y += (dy / d) * half;
+            if (!netPos[n.id]) netPos[n.id] = { x: o.x, y: o.y };
+            netPos[n.id].x -= (dx / d) * half; netPos[n.id].y -= (dy / d) * half;
+            moved[n.id] = 1;
+          }
+        });
+      });
+    }
   }
 
   // 拖动单个节点：网图自由(x,y)；树形仅水平(dx)，纵向锁定在当前世代
