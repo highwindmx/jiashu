@@ -1,0 +1,11 @@
+# 个人 / 示例数据：含真实家谱，不公开
+family-tree-*.json
+
+# 本地开发依赖与临时文件
+node_modules/
+.tmp/
+.workbuddy/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db

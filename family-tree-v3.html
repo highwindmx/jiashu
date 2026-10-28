@@ -1,0 +1,2299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家族树 · 私人离线族谱（全景版）</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --line: #e4e7ec; --soft: #fbfcfd; --text: #1f2329;
+    --muted: #8a9099; --male: #2f6fed; --female: #e0558b; --accent: #2f6fed;
+    --accent-bg: #eaf1ff; --dead: #9aa0a8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6; font-size: 14px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px 16px 70px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; display: flex; align-items: center; gap: 8px; }
+  h1 .tag { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-bg); border-radius: 999px; padding: 2px 9px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; padding-left: 9px; border-left: 3px solid var(--accent); }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; }
+  .card-head h2 { margin: 0; }
+  label { display: inline-block; margin: 4px 8px 4px 0; font-size: 13px; }
+  input[type="text"], select, textarea {
+    padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; background: #fff; color: var(--text);
+  }
+  input[type="text"] { width: 160px; }
+  textarea { width: 100%; min-height: 44px; resize: vertical; }
+  button {
+    padding: 6px 14px; border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    border-radius: 6px; cursor: pointer; font-size: 13px; margin: 0 6px 0 0;
+  }
+  button.ghost { background: #fff; color: var(--accent); }
+  button.mini { padding: 3px 9px; font-size: 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .hint { color: var(--muted); font-size: 12px; }
+
+  /* ---------- 画布 ---------- */
+  .canvas-wrap {
+    position: relative; height: 62vh; min-height: 340px; overflow: hidden;
+    background: radial-gradient(circle at 50% 0%, #ffffff 0%, var(--soft) 70%);
+    border: 1px solid var(--line); border-radius: 10px; cursor: grab; touch-action: none;
+  }
+  .canvas-wrap.dragging { cursor: grabbing; }
+  #treeSvg { display: block; width: 100%; height: 100%; user-select: none; }
+  #treeSvg .tnode { cursor: grab; }
+  #treeSvg .tnode:active { cursor: grabbing; }
+  #treeSvg .tnode:hover .box, #treeSvg .tnode.sel .box { stroke-width: 2.6; }
+  #treeSvg .tnode:hover .box { filter: drop-shadow(0 3px 8px rgba(47,111,237,.22)); }
+  #treeSvg .tnode text { user-select: none; pointer-events: none; }
+  .zoombar {
+    position: absolute; right: 10px; top: 10px; display: flex; align-items: center; gap: 4px;
+    background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 8px;
+    padding: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.06); backdrop-filter: blur(4px);
+  }
+  .zoombar button { margin: 0; padding: 3px 9px; font-size: 12px; border-radius: 6px; background: #fff; color: var(--text); border: 1px solid var(--line); }
+  .zoombar button:hover { border-color: var(--accent); color: var(--accent); }
+  .zoombar .zl { font-size: 11px; color: var(--muted); min-width: 38px; text-align: center; }
+  .legend {
+    position: absolute; left: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 12px;
+    font-size: 11px; color: var(--muted); background: rgba(255,255,255,.9);
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px;
+  }
+  .legend i { display: inline-block; width: 16px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .legend .lm { background: var(--male); }
+  .legend .lf { background: var(--female); }
+  .legend .ld { background: var(--dead); }
+  .legend .ls { border-top: 2px dashed #9aa0a8; height: 0; }
+  .empty-tip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; flex-direction: column; gap: 10px; }
+
+  /* ---------- 折叠列表 ---------- */
+  .gen-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .gen-group { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; overflow: hidden; }
+  .gen-head {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin: 0; padding: 8px 12px; background: #fff; color: var(--text); border: none; border-radius: 0;
+    font-size: 13px; text-align: left; cursor: pointer;
+  }
+  .gen-head:hover { background: var(--accent-bg); }
+  .gen-head .gl { display: flex; align-items: center; gap: 8px; }
+  .gen-head .gname { font-weight: 700; }
+  .gen-head .gcnt { color: var(--muted); font-size: 12px; font-weight: 400; }
+  .gen-head .chev { color: var(--muted); transition: transform .15s; font-size: 11px; }
+  .gen-group.open .gen-head .chev { transform: rotate(90deg); }
+  .gen-body { display: none; border-top: 1px solid var(--line); }
+  .gen-group.open .gen-body { display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; background: #fafbfc; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  td .nm { cursor: pointer; font-weight: 600; }
+  td .nm:hover { color: var(--accent); text-decoration: underline; }
+  .dy { color: var(--dead); font-size: 11px; margin-left: 4px; }
+  .pill { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 999px; background: #eef0f3; color: var(--muted); margin-left: 4px; }
+  .pill.m { background: #e8f0ff; color: var(--male); }
+  .pill.f { background: #fdecf3; color: var(--female); }
+
+  /* ---------- 称谓 ---------- */
+  .rel-line { font-size: 15px; margin: 8px 0; }
+  .rel-term { color: var(--accent); font-weight: 700; font-size: 18px; background: var(--accent-bg); padding: 1px 8px; border-radius: 5px; margin-left: 4px; }
+  .rel-chain { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+  /* ---------- 弹窗 ---------- */
+  .modal { position: fixed; inset: 0; z-index: 50; display: none; }
+  .modal-mask { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+  .modal-card {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: min(500px, 94vw); background: #fff; border-radius: 12px; padding: 16px 18px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.25); max-height: 90vh; overflow: auto;
+  }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; margin-bottom: 10px; }
+  .modal-head .x { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 6px; margin: 0; }
+  .form-row { margin: 9px 0; }
+  .pick-box { max-height: 118px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: #fcfdfe; }
+  .pick-box label { display: block; margin: 2px 0; }
+  .note-line { font-size: 12px; color: var(--accent); background: var(--accent-bg); padding: 6px 10px; border-radius: 6px; margin: 6px 0; }
+  .hidden { display: none !important; }
+
+  /* 节点操作菜单 */
+  .nodemenu {
+    position: fixed; z-index: 70; background: #fff; border: 1px solid var(--line);
+    border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 6px; min-width: 190px;
+  }
+  .nodemenu .nm-title { font-size: 12px; color: var(--muted); padding: 4px 9px 6px; font-weight: 600; }
+  .nodemenu .sep { height: 1px; background: var(--line); margin: 4px 2px; }
+  .nodemenu button {
+    display: block; width: 100%; text-align: left; margin: 0; padding: 7px 10px;
+    font-size: 13px; background: #fff; color: var(--text); border: none; border-radius: 6px;
+  }
+  .nodemenu button:hover { background: var(--accent-bg); }
+  .nodemenu button.danger { color: #d33; }
+
+  /* 版本角标 */
+  .build-badge {
+    position: fixed; right: 10px; bottom: 10px; z-index: 80; font-size: 11px; line-height: 1.4;
+    color: var(--muted); background: #fff; border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 10px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    user-select: none; max-width: 72vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .build-badge:hover { color: var(--accent); border-color: var(--accent); }
+  .toast {
+    position: fixed; left: 50%; bottom: 52px; transform: translateX(-50%);
+    background: #1f2329; color: #fff; font-size: 12px; padding: 8px 14px; border-radius: 8px;
+    z-index: 90; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ---------- 视图切换 ---------- */
+  .view-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-right: 6px; vertical-align: middle; }
+  .view-toggle button { margin: 0; border: none; border-radius: 0; background: #fff; color: var(--muted); padding: 5px 13px; font-size: 12px; }
+  .view-toggle button.active { background: var(--accent); color: #fff; }
+  .view-toggle button:hover:not(.active) { color: var(--accent); }
+
+  /* ---------- 可搜索选择器 ---------- */
+  .picker-host { display: block; }
+  .picker { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: #fcfdfe; }
+  .picker-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
+  .picker-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #eef0f3; color: #1f2329; }
+  .picker-chip.m { background: #e8f0ff; color: var(--male); }
+  .picker-chip.f { background: #fdecf3; color: var(--female); }
+  .picker-x { cursor: pointer; opacity: .55; font-size: 11px; line-height: 1; }
+  .picker-x:hover { opacity: 1; }
+  .picker-input { width: 100%; border: none; outline: none; background: transparent; font-size: 13px; padding: 2px 0; }
+  .picker-drop { margin-top: 5px; border: 1px solid var(--line); border-radius: 6px; max-height: 158px; overflow: auto; background: #fff; }
+  .picker-opt { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+  .picker-opt:hover { background: var(--accent-bg); }
+  .picker-opt-sub { color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .picker-empty { padding: 9px 10px; color: var(--muted); font-size: 12px; }
+
+  /* ---------- 网图图例 ---------- */
+  .legend .lp { border-top: 2px solid #2f6fed; }
+  .legend .lsp { border-top: 2px solid #c1c7d0; }
+
+  /* ---------- 称谓选择器 ---------- */
+  .rel-picker { display: inline-block; min-width: 190px; vertical-align: middle; }
+
+  /* ---------- 移动端适配 ---------- */
+  @media (max-width: 760px) {
+    .wrap { padding: 10px 10px 64px; }
+    h1 { font-size: 17px; }
+    .card { padding: 12px 12px; margin-bottom: 12px; }
+    .card-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .card-head > div { display: flex; flex-wrap: wrap; gap: 6px; }
+    .modal-card {
+      top: auto; bottom: 0; left: 0; transform: none; width: 100%; max-width: 100%;
+      height: auto; max-height: 90vh; border-radius: 14px 14px 0 0; padding: 16px;
+    }
+    .gen-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { min-width: 460px; }
+    .zoombar { right: 8px; top: 8px; padding: 3px; }
+    .zoombar button { padding: 5px 12px; font-size: 13px; }
+    .legend { left: 8px; bottom: 8px; font-size: 10px; gap: 7px; padding: 4px 8px; max-width: 70vw; }
+    .build-badge { font-size: 10px; padding: 3px 8px; }
+    input[type="text"] { width: 130px; }
+    .picker-drop { max-height: 200px; }
+    .toolbar { gap: 6px; }
+    .toolbar button { margin: 0 4px 6px 0; }
+    .build-badge { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>家族树 <span class="tag">全景版</span></h1>
+  <div class="sub">私人离线族谱 · 数据只存本机浏览器（localStorage），断网可用，不上传服务器。<b>滚轮缩放、拖动平移、点卡片弹菜单。</b></div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>族谱全景 <span class="hint" id="treeStat"></span></h2>
+      <div>
+        <span class="view-toggle" id="viewToggle">
+          <button data-view="tree" class="active">树形</button>
+          <button data-view="net">网图</button>
+        </span>
+        <button class="ghost mini" id="btn-add-root">＋ 添加成员</button>
+        <button class="ghost mini" id="btn-relayout">重新布局</button>
+      </div>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <svg id="treeSvg"><g id="viewport"></g></svg>
+      <div class="empty-tip" id="emptyTip">还没有成员<span class="hint">点右上「添加成员」开始，或下方「载入示例」体验</span></div>
+      <div class="zoombar">
+        <button data-zoom="out" title="缩小">－</button>
+        <span class="zl" id="zoomLabel">100%</span>
+        <button data-zoom="in" title="放大">＋</button>
+        <button data-zoom="fit" title="适应窗口">适应</button>
+        <button data-zoom="reset" title="回到 100%">1:1</button>
+      </div>
+      <div class="legend">
+        <span><i class="lm"></i>男</span>
+        <span><i class="lf"></i>女</span>
+        <span><i class="ld"></i>已故 †</span>
+        <span><i class="lp"></i>亲子</span>
+        <span><i class="lsp"></i>配偶</span>
+        <span><i class="ls"></i>继亲</span>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:8px">点任意成员卡片 → 添加子女 / 配偶 / 父母 / 继父母 / 编辑 / 删除。已故成员请勾选「已故」并填卒年。<br>左侧「第N代」为世代标签；<b>同色连线＝同一对父母的子女</b>；彩色虚线弧＝随配偶移走的子女连回其亲生父母；灰色虚线＝继亲。</div>
+  </div>
+
+  <div class="card">
+    <h2>称谓查询 · 点两个人看怎么称呼</h2>
+    <div class="form-row">
+      <label>人物 A <div class="picker-host rel-picker" id="relA"></div></label>
+      <label>人物 B <div class="picker-host rel-picker" id="relB"></div></label>
+      <button id="btn-rel">查称呼</button>
+    </div>
+    <div id="relResult"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>成员列表 <span class="hint" id="memberStat"></span></h2>
+      <div class="gen-tools">
+        <input type="text" id="memberSearch" placeholder="搜索姓名…" style="width:130px">
+        <button class="ghost mini" id="btn-expand-all">全展开</button>
+        <button class="ghost mini" id="btn-collapse-all">全收起</button>
+      </div>
+    </div>
+    <div id="memberGroups"></div>
+  </div>
+
+  <div class="card">
+    <h2>数据 · 备份与恢复</h2>
+    <div class="toolbar">
+      <button class="ghost" id="btn-export">导出 JSON</button>
+      <button class="ghost" id="btn-export-png">导出图片 PNG</button>
+      <button class="ghost" id="btn-export-svg">导出 SVG</button>
+      <button class="ghost" id="btn-import">导入 JSON</button>
+      <input type="file" id="file-import" accept="application/json" style="display:none">
+      <button class="ghost" id="btn-sample">载入示例</button>
+      <button class="ghost" id="btn-clear">清空数据</button>
+    </div>
+    <div class="hint" style="margin-top:8px">数据自动保存在本机浏览器。换设备或重装前请先「导出 JSON」备份；导入会覆盖当前数据。</div>
+  </div>
+</div>
+
+<div class="build-badge" id="buildBadge" data-build="build 2026-10-28 14:21 · bb0b073 · v3-panorama" title="点击复制诊断信息">build 2026-10-28 14:21 · bb0b073 · v3-panorama</div>
+<div class="toast" id="toast"></div>
+<div class="nodemenu" id="nodeMenu" style="display:none"></div>
+
+<div class="modal" id="modal">
+  <div class="modal-mask" id="modal-mask"></div>
+  <div class="modal-card">
+    <div class="modal-head"><span id="modal-title">添加成员</span><button class="x" id="modal-x">✕</button></div>
+    <div class="form-row">
+      <label>姓名 <input type="text" id="f-name" placeholder="如：毛鸿祺"></label>
+      <label>性别
+        <label><input type="radio" name="f-sex" value="M" checked> 男</label>
+        <label><input type="radio" name="f-sex" value="F"> 女</label>
+      </label>
+    </div>
+    <div class="note-line hidden" id="parent-note"></div>
+    <div class="form-row" id="f-parents-row">
+      <label style="display:block">亲生父亲 <select id="f-father"></select></label>
+      <label style="display:block">亲生母亲 <select id="f-mother"></select></label>
+      <label style="display:block">继父（可多选）<div class="picker-host" id="f-stepfather"></div></label>
+      <label style="display:block">继母（可多选）<div class="picker-host" id="f-stepmother"></div></label>
+    </div>
+    <div class="form-row">
+      <label>出生年 <input type="text" id="f-birth" placeholder="选填，如 1932"></label>
+      <label><input type="checkbox" id="f-deceased"> 已故</label>
+      <label id="f-death-wrap" class="hidden">卒年 <input type="text" id="f-death" placeholder="如 2008" style="width:90px"></label>
+    </div>
+    <div class="form-row">
+      <label style="vertical-align:top">配偶</label>
+      <div class="picker-host" id="f-spouses"></div>
+    </div>
+    <div class="form-row">
+      <label style="display:block;vertical-align:top">备注</label>
+      <textarea id="f-note" placeholder="选填"></textarea>
+    </div>
+    <div class="form-row">
+      <button id="btn-save">添加</button>
+      <button id="btn-cancel" class="ghost">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>/*!
+ * relationship.js v1.2.9
+ * Chinese kinship library
+ * https://passer-by.com/relationship/
+ *
+ * Copyright (c) 2016-present, HaoLe Zheng
+ *
+ * Released under the MIT License
+ * https://github.com/mumuy/relationship
+ *
+ * Created on: 2026-04-29
+ */
+!function(s,f){"object"==typeof exports&&"undefined"!=typeof module?module.exports=f():"function"==typeof define&&define.amd?define(f):(s="undefined"!=typeof globalThis?globalThis:s||self).relationship=f()}(this,(function(){"use strict";function s(s,f){(null==f||f>s.length)&&(f=s.length);for(var x=0,d=Array(f);x<f;x++)d[x]=s[x];return d}function f(f,x){if(f){if("string"==typeof f)return s(f,x);var d={}.toString.call(f).slice(8,-1);return"Object"===d&&f.constructor&&(d=f.constructor.name),"Map"===d||"Set"===d?Array.from(f):"Arguments"===d||/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(d)?s(f,x):void 0}}function x(x){return function(f){if(Array.isArray(f))return s(f)}(x)||function(s){if("undefined"!=typeof Symbol&&null!=s[Symbol.iterator]||null!=s["@@iterator"])return Array.from(s)}(x)||f(x)||function(){throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}()}var d=[{exp:/^(\S+?)(应该|得)?(称呼|叫|喊)(\S+?)(什么|啥)？?$/,opt:function(s){return{text:s[4],target:s[1]}}},{exp:/^(\S+?)(应该|得)?(如何|怎么)(称呼|叫|喊)(\S+?)？?$/,opt:function(s){return{text:s[5],target:s[1]}}},{exp:/^(\S+?)是(\S+?)的(谁|什么|什么亲戚|啥亲戚|什么人)？?$/,opt:function(s){return{text:s[1],target:s[2],type:s[1].includes("的")?"default":"chain"}}},{exp:/^(\S+?)(应该|得)?管(\S+?)叫(什么|啥)？?$/,opt:function(s){return{text:s[3],target:s[1]}}},{exp:/^(\S+?)(和|与)(\S+?)(之间)?是(什么|啥)关系？?$/,opt:function(s){return{text:s[1],target:s[3],type:"pair"}}},{exp:/^(\S+?)对于(\S+?)是(什么|啥)关系？?$/,opt:function(s){return{text:s[1],target:s[2],type:"chain"}}},{exp:/^(\S+?)(指的)?是(什么|啥)(意思|关系|亲戚关系|辈分|人)？?$/,opt:function(s){return{text:s[1],type:"chain"}}},{exp:/^(\S+?)(应该|得)?(称呼|叫|喊)(什么|啥)？?$/,opt:function(s){return{text:s[1]}}},{exp:/^(\S+?)(应该|得)?(如何|怎么)(称呼|叫|喊)？?$/,opt:function(s){return{text:s[1]}}},{exp:/^(\S+?)是(谁|什么|什么亲戚|啥亲戚|什么人|什么辈分|啥辈分)？?$/,opt:function(s){return{text:s[1],type:s[1].includes("的")?"default":"chain"}}}];function m(s,f){var x="undefined"!=typeof Symbol&&s[Symbol.iterator]||s["@@iterator"];if(!x){if(Array.isArray(s)||(x=function(s,f){if(s){if("string"==typeof s)return b(s,f);var x={}.toString.call(s).slice(8,-1);return"Object"===x&&s.constructor&&(x=s.constructor.name),"Map"===x||"Set"===x?Array.from(s):"Arguments"===x||/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(x)?b(s,f):void 0}}(s))||f&&s&&"number"==typeof s.length){x&&(s=x);var d=0,m=function(){};return{s:m,n:function(){return d>=s.length?{done:!0}:{done:!1,value:s[d++]}},e:function(s){throw s},f:m}}throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}var o,r=!0,e=!1;return{s:function(){x=x.call(s)},n:function(){var s=x.next();return r=s.done,s},e:function(s){e=!0,o=s},f:function(){try{r||null==x.return||x.return()}finally{if(e)throw o}}}}function b(s,f){(null==f||f>s.length)&&(f=s.length);for(var x=0,d=Array(f);x<f;x++)d[x]=s[x];return d}var o=[{exp:/^(.+)&o([^#]+)&l/g,str:"$1$2"},{exp:/^(.+)&l([^#]+)&o/g,str:"$1$2"},{exp:/^(.+)?,o([sb](&\d+)?)([^#]+)&l/g,str:"$1,x$2$4"},{exp:/^(.+)?,l([sb](&\d+)?)([^#]+)&o/g,str:"$1,x$2$4"},{exp:/(,o[sb](&\d+)?)+(,o[sb])(&\d+)?/,str:"$3$4"},{exp:/(,l[sb](&\d+)?)+(,l[sb])(&\d+)?/,str:"$3$4"},{exp:/^(.*,[fh1])(,[olx][sb](&\d+)?)+,[olx]b(.*)$/,str:"$1,xb$4#$1$4"},{exp:/^(.*,[mw0])(,[olx][sb](&\d+)?)+,[olx]s(.*)$/,str:"$1,xs$4#$1$4"},{exp:/(,[fh1])(,[olx][sb](&\d+)?)+,[olx]s/g,str:"$1,xs"},{exp:/(,[mw0])(,[olx][sb](&\d+)?)+,[olx]b/g,str:"$1,xb"},{exp:/^,[olx][sb](&\d+)?,[olx]b(.+)?$/,str:",xb$2#$2"},{exp:/^,[olx][sb](&\d+)?,[olx]s(.+)?$/,str:",xs$2#$2"},{exp:/^,x([sb])$/,str:",o$1#,l$1"},{exp:/m,h/g,str:"f"},{exp:/f,w/g,str:"m"},{exp:/,[xol][sb](&\d+)?(,[mf])/g,str:"$2"},{exp:/,[mf],d(&\d+)/,str:",xs$1"},{exp:/,[mf],d&([ol])/,str:",$1s"},{exp:/,[mf],s(&\d+)/,str:",xb$1"},{exp:/,[mf],s&([ol])/,str:",$1b"},{exp:/^(.*,[fh1]|[xol]b(&\d+)?),[mf],s(.*)$/,str:"$1,xb$3#$1$3"},{exp:/^(.*,[mw0]|[xol]s(&\d+)?),[mf],d(.*)$/,str:"$1,xs$3#$1$3"},{exp:/(,[mw0]|[xol]s(&\d+)?),[mf],s/,str:"$1,xb"},{exp:/(,[fh1]|[xol]b(&\d+)?),[mf],d/,str:"$1,xs"},{exp:/^,[mf],s(.+)?$/,str:",xb$1#,1$1"},{exp:/^,[mf],d(.+)?$/,str:",xs$1#,0$1"},{exp:/,[ds](&[ol\d]+)?,[olx]b(&\d+)/g,str:",s$2"},{exp:/,[ds](&[ol\d]+)?,[olx]s(&\d+)/g,str:",d$2"},{exp:/,[ds]&o,ob/g,str:",s&o"},{exp:/,[ds]&o,os/g,str:",d&o"},{exp:/,[ds]&l,lb/g,str:",s&l"},{exp:/,[ds]&l,ls/g,str:",d&l"},{exp:/,[ds](&[ol\d]+)?,[olx]s(&\d+)?/g,str:",d$2"},{exp:/,[ds](&[ol\d]+)?,[olx]b(&\d+)?/g,str:",s$2"},{exp:/(,[mwd0]|,[olx]s)(&[ol\d]+)?,[ds](&[ol\d]+)?,m/g,str:"$1"},{exp:/(,[mwd0]|,[olx]s)(&[ol\d]+)?,[ds](&[ol\d]+)?,f/g,str:"$1,h"},{exp:/(,[fhs1]|,[olx]b)(&[ol\d]+)?,[ds](&[ol\d]+)?,f/g,str:"$1"},{exp:/(,[fhs1]|,[olx]b)(&[ol\d]+)?,[ds](&[ol\d]+)?,m/g,str:"$1,w"},{exp:/^,[ds],m(.+)?$/,str:",w$1#$1"},{exp:/^,[ds],f(.+)?$/,str:",h$1#$1"},{exp:/,[wh](,[ds])/g,str:"$1"},{exp:/,w,h|,h,w/g,str:""},{exp:/(.+)?\[([^\|]+?)\|([^\[\]]*\|[^\[\]]*)\](.+)?/g,str:"$1$2$4#$1[$3]$4"},{exp:/(.+)?\[([^\[\]\|]+?)\|([^\[\]\|]+?)?\](.+)?/g,str:"$1$2$4#$1$3$4"}],r=[{exp:/^从表/,arr:["从父姑表","从父舅表","从父姨表","从母姑表","从母舅表","从母叔表"]},{exp:/^表表/,arr:["姑表叔表","姑表姑表","姑表舅表","姑表姨表","舅表叔表","舅表姑表","舅表舅表","舅表姨表"]},{exp:/^([夫妻内外]?)表/,arr:["$1姑表","$1舅表"]},{exp:/^([姑舅])表(?=[^伯叔])/,arr:["$1表伯","$1表叔"]},{exp:/^姻/,arr:["姑姻","姨姻","姊妹姻","女姻"]},{exp:/^眷/,arr:["叔眷","舅眷","兄弟眷","男眷"]},{exp:/^亲家/,arr:["姊妹姻","兄弟眷"]},{exp:/^([堂表姨]?)([曾高天烈太远鼻]?)(祖?)([伯叔姑舅姨])/,arr:["$1$4$2$3"]},{exp:/^([曾高天烈太远鼻]?)祖?王姑/,arr:["姑$1祖母"]},{exp:/^([曾玄元来晜仍云耳])([侄甥])/,arr:["$2$1"]},{exp:/^外表([伯叔姑舅姨])/,arr:["姑表$1外","舅表$1外"]},{exp:/([堂表姨]?)外甥/,arr:["$1甥"]},{exp:/^([舅叔])([曾玄外]*)孙/,arr:["$1侄$2孙"]},{exp:/^([姨姑])([曾玄外]*)孙/,arr:["$1甥$2孙"]},{exp:/([孙甥侄])$/,arr:["$1男","$1女"]},{exp:/([姑舅姨叔])([孙外]*)([男女])$/,arr:["$1表侄$2$3","$1表甥$2$3"]},{exp:/(.+)父母$/,arr:["$1父","$1母"]},{exp:/(.+)公婆$/,arr:["$1公","$1婆"]},{exp:/祖$/,arr:["祖父"]},{exp:/(新妇|媳)$/,arr:["媳妇"]},{exp:/嫂$/,arr:["兄妇"]},{exp:/女儿$/,arr:["女"]}],e={"晜":"兄","哥":"兄","姐":"姊","侄":"姪","婿":"壻","嬷":"嫲","祖父":"王父","祖母":"王母","孙女婿":"孙婿","甥女婿":"甥婿","侄女婿":"侄婿","孙媳妇":"孙妇","甥媳妇":"甥妇","侄媳妇":"侄妇","弟媳妇":"弟妇"};function t(s,x){return function(s){if(Array.isArray(s))return s}(s)||function(s,f){var x=null==s?null:"undefined"!=typeof Symbol&&s[Symbol.iterator]||s["@@iterator"];if(null!=x){var d,m,b,o,r=[],e=!0,t=!1;try{if(b=(x=x.call(s)).next,0===f){if(Object(x)!==x)return;e=!1}else for(;!(e=(d=b.call(x)).done)&&(r.push(d.value),r.length!==f);e=!0);}catch(s){t=!0,m=s}finally{try{if(!e&&null!=x.return&&(o=x.return(),Object(o)!==o))return}finally{if(t)throw m}}return r}}(s,x)||f(s,x)||function(){throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}()}var h=["","一","二","三","四","五","六","七","八","九","十"];function l(s,f){return f.forEach((function(f,x){var d=s.get(x)||[];s.set(x,d.concat(f))})),s}function M(s){return new Map(Object.entries(s))}var w={"f#s":["父子"],"m#s":["母子"],"f#d":["父女"],"m#d":["母女"],"h#w":["夫妻"],"ob#lb":["兄弟"],"ob#ls":["兄妹"],"os#ls":["姐妹"],"os#lb":["姐弟"],"w,f#d,h":["翁婿"],"w,m#d,h":["母婿"],"h,f#s,w":["翁媳"],"h,m#s,w":["婆媳"],"f,[f|m]#s,[s|d]":["祖孙"],"m,f#d,[s|d]":["公孙"],"m,m#d,[s|d]":["婆孙"],"f,[ob|ob,w]#[lb|h,lb],[s|d]":["伯侄"],"f,lb#ob,[s|d]":["叔侄"],"f,lb,w#h,ob,[s|d]":["婶侄"],"f,[xs|xs,h]#[xb|w,xb],[s|d]":["姑侄"],"m,[xb|xb,w]#[xs|h,xs],[s|d]":["舅甥"],"m,[xs|xs,h]#[xs|w,xs],[s|d]":["姨甥"],"f,xb,s&o#f,xb,s&l":["堂兄弟"],"f,xb,s&o#f,xb,d&l":["堂兄妹"],"f,xb,d&o#f,xb,s&l":["堂姐弟"],"f,xb,d&o#f,xb,d&l":["堂姐妹"],"f,xs,s&o#m,xb,s&l":["表兄弟"],"m,xb,s&o#f,xs,s&l":["表兄弟"],"f,xs,s&o#m,xb,d&l":["表兄妹"],"m,xb,s&o#f,xs,d&l":["表兄妹"],"f,xs,d&o#m,xb,d&l":["表姐妹"],"m,xb,d&o#f,xs,d&l":["表姐妹"],"f,xs,d&o#m,xb,s&l":["表姐弟"],"m,xb,d&o#f,xs,s&l":["表姐弟"],"m,xs,s&o#m,xs,s&l":["姨兄弟"],"m,xs,s&o#m,xs,d&l":["姨兄妹"],"m,xs,d&o#m,xs,s&l":["姨姐弟"],"m,xs,d&o#m,xs,d&l":["姨姐妹"],"h,ob,w#h,lb,w":["妯娌"],"w,os,h#w,ls,h":["连襟"],"w,os#ls,h":["襟姐弟"],"w,ls#os,h":["襟兄妹"],"xs,h#w,xb":["郎舅"],"xs,h#w,xs":["郎姨"],"lb,w#h,ob":["伯媳"],"ob,w#h,lb":["叔嫂"],"xb,w#h,xs":["姑嫂"],"xs,h,xb#xb,w,xb":["姻兄弟"],"d,h,[f|m]#s,w,[f|m]":["儿女亲家"]},n={"f,xb":["几爸爸","几爸","几爹"],"f,xb,w":["几妈妈","几妈","几娘"],"f,f,xb":["几爷爷","几大爷","几嗲","几爷","几公"],"f,f,xb,w":["几奶奶","几大娘","几奶","几婆"],"m,f,xb":["几外公","几姥爷","几外爷"],"m,f,xb,w":["几外婆","几姥姥","几姥奶","几外奶","几姥"]},a={"{G2}":{"f,f,xb":["从祖"],"m,f,xb":["外从祖"]},"{G1}":{"f,xb":["堂","同堂","亲堂","从父","叔伯","堂房","从"],"f,xs":["姑表","姑家"],"m,xb":["舅表","舅家"],"m,xs":["姨","从母","两姨","姨表","从"],"f,f,xb,s":["从堂","再从父","远堂","堂叔伯","叔伯叔伯","再从"],"f,f,xb,d":["堂姑表","从父姑表"],"f,f,xs,s":["姑表叔表"],"f,f,xs,d":["姑表姑表"],"f,m,xb,s":["舅表叔表"],"f,m,xb,d":["舅表姑表"],"f,m,xs,s":["从母叔表"],"f,m,xs,d":["从母姑表"],"m,f,xb,s":["堂舅表","从父舅表"],"m,f,xb,d":["堂姨表","从父姨表"],"m,f,xs,s":["姑表舅表"],"m,f,xs,d":["姑表姨表"],"m,m,xb,s":["舅表舅表"],"m,m,xb,d":["舅表姨表"],"m,m,xs,s":["从母舅表"],"m,m,xs,d":["再从母","姨姨","再从"],"f,f,f,xb,s,s":["三从父","再从堂","远堂","族","三从"],"m,m,m,xs,d,d":["三从母","三从"],"f,f,f,f,xb,s,s,s":["四从父","三从堂","远堂","族","四从"],"m,m,m,m,xs,d,d,d":["四从母","四从"],"[f|m],[f|m],[f|m],[f,xs|m,xb],[s|d],[s|d],[s|d]":["重表"],"[f|m],[f|m],[f,xs|m,xb],[s|d],[s|d]":["重表"]},"{G1M}":{"f,ob":["伯"],"f,lb":["叔","仲","季"],"m,xb":["舅"],"f,f,xb,s":["堂","从父","叔伯","从"],"f,f,xb,s&o":["堂伯","从父伯","叔伯伯","从伯"],"f,f,xb,s&l":["堂叔","从父叔","叔伯叔","从叔"],"f,f,f,xb,s,s":["从堂"],"f,f,f,xb,s,s&o":["从堂伯"],"f,f,f,xb,s,s&l":["从堂叔"],"f,f,f,f,xb,s,s,s":["族"],"f,f,xs,s&o":["姑表伯"],"f,f,xs,s&l":["姑表叔"],"f,m,xb,s&o":["舅表伯"],"f,m,xb,s&l":["舅表叔"],"f,m,xs,s&o":["姨伯","从母伯","从伯"],"f,m,xs,s&l":["姨叔","从母叔","从叔"],"m,f,xb,s":["堂舅","从父舅","叔伯舅"],"m,f,xs,s":["姑表舅"],"m,m,xb,s":["舅表舅"],"m,m,xs,s":["姨舅","从母舅"],"f,[f|m],[f|m],[f,xs|m,xb],[s|d],[s|d],s&o":["重表伯"],"f,[f|m],[f|m],[f,xs|m,xb],[s|d],[s|d],s&l":["重表叔"],"f,[f|m],[f,xs|m,xb],[s|d],s&o":["重表伯"],"f,[f|m],[f,xs|m,xb],[s|d],s&l":["重表叔"],"m,[f|m],[f|m],[f,xs|m,xb],[s|d],[s|d],s":["重表舅"],"m,[f|m],[f,xs|m,xb],[s|d],s":["重表舅"]},"{G1W}":{"f,xs":["姑"],"m,xs":["姨","姏","茙","荻"],"f,f,xb,d":["堂姑","从父姑"],"f,f,f,xb,s,d":["从堂姑"],"f,f,xs,d":["姑表姑"],"f,m,xb,d":["舅表姑"],"f,m,xs,d":["姨姑","从母姑"],"m,f,xb,d":["堂姨","从父姨","叔伯姨"],"m,f,xs,d":["姑表姨"],"m,m,xb,d":["舅表姨"],"m,m,xs,d":["姨姨","从母姨"],"f,[f|m],[f|m],[f,xs|m,xb],[s|d],[s|d],d":["重表姑"],"f,[f|m],[f,xs|m,xb],[s|d],d":["重表姑"],"m,[f|m],[f|m],[f,xs|m,xb],[s|d],[s|d],d":["重表姨"],"m,[f|m],[f,xs|m,xb],[s|d],d":["重表姨"]},"{G0}":{xb:["侄"],"1,xb":["从"],"1,f,xb,s":["再从"],"1,f,f,xb,s,s":["三从"],"h,xb":["叔侄","叔伯"],"w,xb":["舅侄"],xs:["甥","外甥"],"0,xs":["从"],"0,m,xs,d":["再从"],"0,m,m,xs,d,d":["三从"],"h,xs":["姑甥"],"w,xs":["姨甥","襟侄"]},"{M2W}":{"f,f,xb,w":["叔祖眷"],"m,f,xb,w":["叔外祖眷"],"f,m,xb,w":["舅祖眷"],"m,m,xb,w":["舅外祖眷"]},"{M2M}":{"f,f,xs,h":["姑祖姻"],"m,f,xs,h":["姑外祖姻"],"f,m,xs,h":["姨祖姻"],"m,m,xs,h":["姨外祖姻"]},"{M1W}":{"f,xb,w":["叔眷"],"f,f,xb,s,w":["从父叔眷"],"f,f,xs,s,w":["姑表叔眷"],"f,m,xb,s,w":["舅表叔眷"],"f,m,xs,s,w":["从母叔眷"],"m,xb,w":["舅眷"],"m,f,xb,s,w":["从父舅眷"],"m,f,xs,s,w":["姑表舅眷"],"m,m,xb,s,w":["舅表舅眷"],"m,m,xs,s,w":["从母舅眷"]},"{M1M}":{"f,xs,h":["姑姻"],"f,f,xb,d,h":["从父姑姻"],"f,f,xs,d,h":["姑表姑姻"],"f,m,xb,d,h":["舅表姑姻"],"f,m,xs,d,h":["从母姑姻"],"m,xs,h":["姨姻"],"m,f,xb,d,h":["从父姨姻"],"m,f,xs,d,h":["姑表姨姻"],"m,m,xb,d,h":["舅表姨姻"],"m,m,xs,d,h":["从母姨姻"]},"{M0}":{"xb,w":["兄弟眷"],"xs,h":["姊妹姻"],"w,xb,w":["舅兄弟眷","内兄弟眷"],"w,xs,h":["姨姊妹姻","内姊妹姻"],"h,xb,w":["叔兄弟眷","外兄弟眷"],"h,xs,h":["姑姊妹姻","外姊妹姻"],"f,xb,s,w":["从父兄弟眷"],"f,xb,d,h":["从父姊妹姻"],"f,xs,s,w":["姑表兄弟眷"],"f,xs,d,h":["姑表姊妹姻"],"m,xb,s,w":["舅表兄弟眷"],"m,xb,d,h":["舅表姊妹姻"],"m,xs,s,w":["从母兄弟眷"],"m,xs,d,h":["从母姊妹姻"]},"{M-1}":{"s,w":["男眷","息眷"],"d,h":["女姻","息姻"],"xb,s,w":["侄眷"],"xb,d,h":["侄姻"],"xs,s,w":["甥眷"],"xs,d,h":["甥姻"],"h,xb,s,w":["叔侄眷"],"h,xb,d,h":["叔侄姻"],"h,xs,s,w":["姑甥眷"],"h,xs,d,h":["姑甥姻"],"w,xb,s,w":["舅侄眷"],"w,xb,d,h":["舅侄姻"],"w,xs,s,w":["姨甥眷"],"w,xs,d,h":["姨甥姻"],"f,xb,s,s,w":["堂侄眷"],"f,xb,s,d,h":["堂侄姻"],"f,xb,d,s,w":["堂甥眷"],"f,xb,d,d,h":["堂甥姻"],"f,xs,s,s,w":["姑表侄眷"],"f,xs,s,d,h":["姑表侄姻"],"f,xs,d,s,w":["姑表甥眷"],"f,xs,d,d,h":["姑表甥姻"],"m,xb,s,s,w":["舅表侄眷"],"m,xb,s,d,h":["舅表侄姻"],"m,xb,d,s,w":["舅表甥眷"],"m,xb,d,d,h":["舅表甥姻"],"m,xs,s,s,w":["姨侄眷"],"m,xs,s,d,h":["姨侄姻"],"m,xs,d,s,w":["姨甥眷"],"m,xs,d,d,h":["姨甥姻"]},"{M-2}":{"s,s,w":["孙眷"],"s,d,h":["孙姻"],"d,s,w":["外孙眷"],"d,d,h":["外孙姻"],"xb,s,s,w":["侄孙眷"],"xb,s,d,h":["侄孙姻"],"xb,d,s,w":["侄外孙眷"],"xb,d,d,h":["侄外孙姻"],"xs,s,s,w":["甥孙眷"],"xs,s,d,h":["甥孙姻"],"xs,d,s,w":["甥外孙眷"],"xs,d,d,h":["甥外孙姻"],"h,xb,s,s,w":["叔侄孙眷","叔伯孙眷","叔孙眷"],"h,xb,s,d,h":["叔侄孙姻","叔伯孙姻","叔孙姻"],"h,xb,d,s,w":["叔侄外孙眷","叔伯外孙眷","叔外孙眷"],"h,xb,d,d,h":["叔侄外孙姻","叔伯外孙姻","叔外孙姻"],"h,xs,s,s,w":["姑甥孙眷","姑孙眷"],"h,xs,s,d,h":["姑甥孙姻","姑孙姻"],"h,xs,d,s,w":["姑甥外孙眷","姑外孙眷"],"h,xs,d,d,h":["姑甥外孙姻","姑外孙姻"],"w,xb,s,s,w":["舅侄孙眷","舅孙眷"],"w,xb,s,d,h":["舅侄孙姻","舅孙姻"],"w,xb,d,s,w":["舅侄外孙眷","舅外孙眷"],"w,xb,d,d,h":["舅侄外孙姻","舅外孙姻"],"w,xs,s,s,w":["姨甥孙眷","姨孙眷"],"w,xs,s,d,h":["姨甥孙姻","姨孙姻"],"w,xs,d,s,w":["姨甥外孙眷","姨外孙眷"],"w,xs,d,d,h":["姨甥外孙姻","姨外孙姻"]}},c={"{G2},s":["父"],"{G2},s,w":["母"],"{G2},s,s":["兄弟"],"{G2},s,s&o":["兄"],"{G2},s,s&l":["弟"],"{G2},s,s,s":["男","子"],"{G2},s,s,d":["女"],"{G2},s,d":["姊妹"],"{G2},s,d&o":["姊"],"{G2},s,d&l":["妹"],"f,f,f,f,f,f,f,f,[{G1M}|{G1W},h]":["鼻祖父"],"f,f,f,f,f,f,f,f,[{G1M},w|{G1W}]":["鼻祖母"],"f,f,f,f,f,f,f,[{G1M}|{G1W},h]":["远祖父"],"f,f,f,f,f,f,f,[{G1M},w|{G1W}]":["远祖母"],"f,f,f,f,f,f,[{G1M}|{G1W},h]":["太祖父"],"f,f,f,f,f,f,[{G1M},w|{G1W}]":["太祖母"],"f,f,f,f,f,[{G1M}|{G1W},h]":["烈祖父"],"f,f,f,f,f,[{G1M},w|{G1W}]":["烈祖母"],"f,f,f,f,[{G1M}|{G1W},h]":["天祖父"],"f,f,f,f,[{G1M},w|{G1W}]":["天祖母"],"f,f,f,[{G1M}|{G1W},h]":["高祖父","外曾外曾外毑父"],"f,f,f,[{G1M},w|{G1W}]":["高祖母","外曾外曾外毑母"],"f,f,m,[{G1M}|{G1W},h]":["高外祖父","外曾外曾毑父"],"f,f,m,[{G1M},w|{G1W}]":["高外祖母","外曾外曾毑母"],"f,m,f,[{G1M}|{G1W},h]":["曾外曾祖父","外高外毑父"],"f,m,f,[{G1M},w|{G1W}]":["曾外曾祖母","外高外毑母"],"f,m,m,[{G1M}|{G1W},h]":["曾外曾外祖父","外高毑父"],"f,m,m,[{G1M},w|{G1W}]":["曾外曾外祖母","外高毑母"],"m,f,f,[{G1M}|{G1W},h]":["外高祖父","曾外曾外毑父"],"m,f,f,[{G1M},w|{G1W}]":["外高祖母","曾外曾外毑母"],"m,f,m,[{G1M}|{G1W},h]":["外高外祖父","曾外曾祖毑父"],"m,f,m,[{G1M},w|{G1W}]":["外高外祖母","曾外曾祖毑母"],"m,m,f,[{G1M}|{G1W},h]":["外曾外曾祖父","高外毑父"],"m,m,f,[{G1M},w|{G1W}]":["外曾外曾祖母","高外毑母"],"m,m,m,[{G1M}|{G1W},h]":["外曾外曾外祖父","高毑父"],"m,m,m,[{G1M},w|{G1W}]":["外曾外曾外祖母","高毑母"],"f,f,[{G1M}|{G1W},h]":["?曾祖父","曾?祖父","?太公","太?公","?公太","太?爷","?太爷","?太爷爷","太?爷爷"],"f,f,[{G1M},w|{G1W}]":["?曾祖母","曾?祖母","?太婆","太?婆","?婆太","太?奶","?太奶","?太奶奶","太?奶奶"],"f,m,[{G1M}|{G1W},h]":["?曾外祖父","曾外?祖父","?太外公","太外?公","太外?爷","?太外爷","?太外爷爷","太外?爷爷"],"f,m,[{G1M},w|{G1W}]":["?曾外祖母","曾外?祖母","?太外婆","太外?婆","太外?奶","?太外奶","?太外奶奶","太外?奶奶"],"m,f,[{G1M}|{G1W},h]":["?外曾祖父","外曾?祖父","?外太公","外太?公","外太?爷","?外太爷","?外太爷爷","外太?爷爷"],"m,f,[{G1M},w|{G1W}]":["?外曾祖母","外曾?祖母","?外太婆","外太?婆","外太?奶","?外太奶","?外太奶奶","外太?奶奶"],"m,m,[{G1M}|{G1W},h]":["?外曾外祖父","外曾外?祖父","?外太外公","外太外?公","外太外?爷","?外太外爷","?外太外爷爷","外太外?爷爷"],"m,m,[{G1M},w|{G1W}]":["?外曾外祖母","外曾外?祖母","?外太外婆","外太外?婆","外太外?奶","?外太外奶","?外太外奶奶","外太外?奶奶"],"f,[{G1M}|{G1W},h]":["祖父","公","太?父","奶爷","爷爷","爷"],"f,[{G1M},w|{G1W}]":["祖母","婆","太?母","奶奶","奶"],"m,[{G1M}|{G1W},h]":["外祖父","外公","外爷","外?公","外?祖父","外太?父","太外?父","姥爷","姥公","毑公","毑爷","毑父","嘎公"],"m,[{G1M},w|{G1W}]":["外祖母","外婆","外奶","外?婆","外?祖母","外太?母","太外?母","姥姥","姥婆","毑婆","毑毑","毑母","嘎嘎"],"f,f,{G1},s&o":["伯祖父","伯爷爷"],"f,f,{G1},s&o,w":["伯祖母","伯奶奶"],"f,f,{G1},s&l":["叔祖父","叔爷爷"],"f,f,{G1},s&l,w":["叔祖母","叔奶奶"],"f,f,{G1},d":["姑祖母","姑奶奶"],"f,f,{G1},d,h":["姑祖父","姑爷爷"],"f,m,{G1},s":["舅祖父","舅爷爷"],"f,m,{G1},s,w":["舅祖母","舅奶奶"],"f,m,{G1},d":["姨祖母","姨奶奶"],"f,m,{G1},d,h":["姨祖父","姨爷爷"],"m,f,{G1},s&o":["伯外祖父","伯外公","伯姥爷"],"m,f,{G1},s&o,w":["伯外祖母","伯外婆","伯姥姥"],"m,f,{G1},s&l":["叔外祖父","叔外公","叔姥爷"],"m,f,{G1},s&l,w":["叔外祖母","叔外婆","叔姥姥"],"m,f,{G1},d":["姑外祖母","姑外婆","姑姥姥"],"m,f,{G1},d,h":["姑外祖父","姑外公","姑姥爷"],"m,m,{G1},s":["舅外祖父","舅外公","舅姥爷"],"m,m,{G1},s,w":["舅外祖母","舅外婆","舅姥姥"],"m,m,{G1},d":["姨外祖母","姨外公","姨姥爷"],"m,m,{G1},d,h":["姨外祖父","姨外婆","姨姥姥"],"{G1M}#{G1W},h":["父"],"{G1M},w#{G1W}":["母"],"f,{G1},s&o":["伯父","伯伯","伯","大爷"],"f,{G1},s&o,w":["伯母","大娘"],"f,{G1},s&l":["叔父","叔爸","叔叔","叔"],"f,{G1},s&l,w":["叔母","婶"],"f,{G1},d":["姑母","姑姑","姑妈","姑"],"f,{G1},d,h":["姑父","姑丈","姑爸","姑夫"],"m,{G1},s":["舅父","舅舅","舅爸","舅"],"m,{G1},s,w":["舅母","舅妈"],"m,{G1},d":["姨母","姨姨","姨妈","姨"],"m,{G1},d,h":["姨父","姨丈","姨爸","姨夫"],"{G1},s":["兄弟"],"{G1},s,w":["兄弟妇"],"{G1},s&o":["哥","哥哥","阿哥"],"{G1},s&o,w":["嫂","嫂子","兄妇"],"{G1},s&l":["弟","弟弟","阿弟"],"{G1},s&l,w":["弟媳","弟妇"],"{G1},s,s":["侄男","侄子","侄儿"],"{G1},s,s,w":["侄妇"],"{G1},s,s,s":["侄孙男"],"{G1},s,s,s,w":["侄孙妇"],"{G1},s,s,s,s":["侄曾孙男"],"{G1},s,s,s,s,w":["侄曾孙妇"],"{G1},s,s,s,s,s":["侄玄孙男"],"{G1},s,s,s,s,s,w":["侄玄孙妇"],"{G1},s,s,s,s,d":["侄玄孙女"],"{G1},s,s,s,s,d,h":["侄玄孙婿"],"{G1},s,s,d":["侄孙女"],"{G1},s,s,d,h":["侄孙婿"],"{G1},s,s,s,d":["侄曾孙女"],"{G1},s,s,s,d,h":["侄曾孙婿"],"{G1},s,d":["侄女","侄女儿"],"{G1},s,d,h":["侄婿"],"{G1},s,d,s":["侄外孙男","外孙男"],"{G1},s,d,s,w":["侄外孙妇"],"{G1},s,d,d":["侄外孙女","外孙女"],"{G1},s,d,d,h":["侄外孙婿"],"{G1},d":["姐妹"],"{G1},d,h":["姐妹壻"],"{G1},d&o":["姐","姐姐","阿姐"],"{G1},d&o,h":["姐夫"],"{G1},d&l":["妹","妹妹","阿妹"],"{G1},d&l,h":["妹夫"],"{G1},d,s":["甥男"],"{G1},d,s,w":["甥妇"],"{G1},d,s,s":["甥孙男"],"{G1},d,s,s,w":["甥孙妇"],"{G1},d,s,d":["甥孙女"],"{G1},d,s,d,h":["甥孙婿"],"{G1},d,d":["甥女"],"{G1},d,d,h":["甥婿"],"{G1},d,d,s":["甥外孙男","外孙男"],"{G1},d,d,s,w":["甥外孙妇"],"{G1},d,d,d":["甥外孙女","外孙女"],"{G1},d,d,d,h":["甥外孙婿"],"h,f,[{G1M}|{G1W},h]":["祖公父","祖公","祖翁","奶公"],"h,f,[{G1M},w|{G1W}]":["祖婆母","祖婆","祖姆","奶婆"],"h,m,[{G1M}|{G1W},h]":["外祖公父","外祖公","外祖翁","姥公"],"h,m,[{G1M},w|{G1W}]":["外祖婆母","外祖婆","外祖姆","姥婆"],"h,[{G1M}|{G1W},h]":["公父","公公"],"h,[{G1M},w|{G1W}]":["婆母","婆婆"],"h,{G1},s&o":["大伯子","大伯兄"],"h,{G1},s&o,w":["大婶子","大伯嫂"],"h,{G1},s&l":["小叔子","小叔弟"],"h,{G1},s&l,w":["小婶子","小叔弟妇"],"h,{G1},s":["伯叔"],"h,{G1},s,w":["妯娌"],"h,{G1},d&o":["大姑子","大姑姐"],"h,{G1},d&o,h":["大姑夫","大姑姐夫"],"h,{G1},d&l":["小姑子","小姑妹"],"h,{G1},d&l,h":["小姑夫","小姑妹夫"],"h,{G1},d":["姑子"],"h,{G1},d,h":["姑夫"],"w,f,[{G1M}|{G1W},h]":["祖岳父","太?岳","祖丈人","爷丈人","奶爷丈人"],"w,f,[{G1M},w|{G1W}]":["祖岳母","太?岳母","祖丈母","祖丈母娘","奶丈母娘","奶丈母"],"w,m,[{G1M}|{G1W},h]":["外祖岳父","外太?岳父","太外?岳父","外祖丈人","姥爷丈人"],"w,m,[{G1M},w|{G1W}]":["外祖岳母","外太?岳母","太外?岳母","外祖丈母","外祖丈母娘","姥丈母娘","姥丈母"],"w,[{G1M}|{G1W},h]":["岳父","丈人","丈人爹"],"w,[{G1M},w|{G1W}]":["岳母","丈母","丈母娘"],"w,{G1},s&o":["大舅子","大舅兄","舅兄"],"w,{G1},s&o,w":["大舅妇","大舅姆","大舅兄妇","舅兄妇","舅姐","大舅姐","大妗子","大妗儿"],"w,{G1},s&l":["小舅子","小舅弟","舅弟"],"w,{G1},s&l,w":["小舅妇","小舅姆","小舅弟妇","舅弟妇","舅妹","小舅妹","小妗子","小妗儿"],"w,{G1},s":["舅子"],"w,{G1},s,w":["舅嫂"],"w,{G1},d&o":["大姨子","大姨姐","姨姐"],"w,{G1},d&o,h":["大姨夫","大姨姐夫","襟兄","姨兄","大姨哥","大尹子"],"w,{G1},d&l":["小姨子","小姨妹","姨妹"],"w,{G1},d&l,h":["小姨夫","小姨妹夫","襟弟","姨弟","小姨弟","小尹子"],"w,{G1},d":["姨子"],"w,{G1},d,h":["连襟","连桥"],"{G0},s":["男","男儿","儿","子","儿子"],"{G0},s,w":["媳妇","媳","妇"],"{G0},s,s":["孙","孙男","孙子"],"{G0},s,s,w":["孙妇"],"{G0},s,s,s":["曾孙","曾孙男"],"{G0},s,s,s,w":["曾孙妇"],"{G0},s,s,s,s":["玄孙","玄孙男","元孙","元孙男"],"{G0},s,s,s,s,w":["玄孙妇"],"{G0},s,s,s,d":["玄孙女","元孙女"],"{G0},s,s,s,d,h":["玄孙婿"],"{G0},s,s,d":["曾孙女"],"{G0},s,s,d,h":["曾孙婿"],"{G0},s,s,d,s":["玄外孙","玄外孙男"],"{G0},s,s,d,s,w":["玄外孙妇"],"{G0},s,s,d,d":["玄外孙女"],"{G0},s,s,d,d,h":["玄外孙婿"],"{G0},s,d":["孙女"],"{G0},s,d,h":["孙婿"],"{G0},s,d,s":["曾外孙","曾外孙男"],"{G0},s,d,s,w":["曾外孙妇"],"{G0},s,d,s,s":["曾外曾孙","曾外曾孙男"],"{G0},s,d,s,s,w":["曾外曾孙妇"],"{G0},s,d,s,d":["曾外曾孙女"],"{G0},s,d,s,d,h":["曾外曾孙婿"],"{G0},s,d,d":["曾外孙女"],"{G0},s,d,d,h":["曾外孙婿"],"{G0},s,d,d,s":["曾外曾外孙","曾外曾外孙男"],"{G0},s,d,d,s,w":["曾外曾外孙妇"],"{G0},s,d,d,d":["曾外曾外孙女"],"{G0},s,d,d,d,h":["曾外曾外孙婿"],"{G0},d":["女","女儿"],"{G0},d,h":["女婿","婿"],"{G0},d,s":["外孙","外孙男"],"{G0},d,s,w":["外孙妇"],"{G0},d,s,s":["外曾孙","外曾孙男"],"{G0},d,s,s,w":["外曾孙妇"],"{G0},d,s,s,s":["外玄孙","外玄孙男"],"{G0},d,s,s,d":["外玄孙女"],"{G0},d,s,d":["外曾孙女"],"{G0},d,s,d,h":["外曾孙婿"],"{G0},d,s,d,s":["外玄外孙","外玄外孙男"],"{G0},d,s,d,d":["外玄外孙女"],"{G0},d,d":["外孙女"],"{G0},d,d,h":["外孙婿"],"{G0},d,d,s":["外曾外孙","外曾外孙男"],"{G0},d,d,s,w":["外曾外孙妇"],"{G0},d,d,s,s":["外曾外曾孙","外曾外曾孙男"],"{G0},d,d,s,d":["外曾外曾孙女"],"{G0},d,d,d":["外曾外孙女"],"{G0},d,d,d,h":["外曾外孙婿"],"{G0},d,d,d,s":["外曾外曾外孙"],"{G0},d,d,d,d":["外曾外曾外孙女"],"{M2W},xb":["舅祖父"],"{M2W},xb,w":["舅祖母"],"{M2W},xb,s&o":["舅表伯父"],"{M2W},xb,s&o,w":["舅表伯母"],"{M2W},xb,s&l":["舅表叔父"],"{M2W},xb,s&l,w":["舅表叔母"],"{M2W},xb,d":["舅表姑母"],"{M2W},xb,d,h":["舅表姑父"],"{M2W},xs":["姨祖母"],"{M2W},xs,h":["姨祖父"],"{M2W},xs,s&o":["姨伯父"],"{M2W},xs,s&o,w":["姨伯母"],"{M2W},xs,s&l":["姨叔父"],"{M2W},xs,s&l,w":["姨叔母"],"{M2W},xs,d":["姨姑母"],"{M2W},xs,d,h":["姨姑父"],"{M2M},xb":["叔祖父"],"{M2M},xb,w":["叔祖母"],"{M2M},xb,s&o":["堂伯父"],"{M2M},xb,s&o,w":["堂伯母"],"{M2M},xb,s&l":["堂叔父"],"{M2M},xb,s&l,w":["堂叔母"],"{M2M},xb,d":["堂姑母"],"{M2M},xb,d,h":["堂姑父"],"{M2M},xs":["姑祖母"],"{M2M},xs,h":["姑祖父"],"{M2M},xs,s&o":["姑表伯父"],"{M2M},xs,s&o,w":["姑表伯母"],"{M2M},xs,s&l":["姑表叔父"],"{M2M},xs,s&l,w":["姑表叔母"],"{M2M},xs,d":["姑表姑母"],"{M2M},xs,d,h":["姑表姑父"],"{M1W},f":["外祖父"],"{M1W},f,xb,s":["堂舅父"],"{M1W},f,xb,s,w":["堂舅母"],"{M1W},f,xb,d":["堂姨母"],"{M1W},f,xb,d,h":["堂姨父"],"{M1W},f,ob":["伯外祖父"],"{M1W},f,ob,w":["伯外祖母"],"{M1W},f,lb":["叔外祖父"],"{M1W},f,lb,w":["叔外祖母"],"{M1W},f,xs":["姑外祖母"],"{M1W},f,xs,h":["姑外祖父"],"{M1W},f,xs,s":["姑表舅父"],"{M1W},f,xs,s,w":["姑表舅母"],"{M1W},f,xs,d":["姑表姨母"],"{M1W},f,xs,d,h":["姑表姨父"],"{M1W},m":["外祖母"],"{M1W},m,xb":["舅外祖父"],"{M1W},m,xb,w":["舅外祖母"],"{M1W},m,xb,s":["舅表舅父"],"{M1W},m,xb,s,w":["舅表舅母"],"{M1W},m,xb,d":["舅表姨母"],"{M1W},m,xb,d,h":["舅表姨父"],"{M1W},m,xs":["姨外祖母"],"{M1W},m,xs,h":["姨外祖父"],"{M1W},m,xs,s":["姨舅父"],"{M1W},m,xs,s,w":["姨舅母"],"{M1W},m,xs,d":["姨姨母"],"{M1W},m,xs,d,h":["姨姨父"],"{M1W},xb":["舅父"],"{M1W},xb,w":["舅母"],"{M1W},xb,[s|d]":["舅表兄弟姊妹"],"{M1W},xb,s":["舅表兄弟"],"{M1W},xb,s,w":["舅表兄弟妇"],"{M1W},xb,s&o":["舅表兄"],"{M1W},xb,s&o,w":["舅表兄妇"],"{M1W},xb,s&l":["舅表弟"],"{M1W},xb,s&l,w":["舅表弟妇"],"{M1W},xb,s,s":["舅表侄男","侄男"],"{M1W},xb,s,s,w":["舅表侄妇","侄妇"],"{M1W},xb,s,d":["舅表侄女","侄女"],"{M1W},xb,s,d,h":["舅表侄婿","侄婿"],"{M1W},xb,d":["舅表姊妹"],"{M1W},xb,d,h":["舅表姊妹壻"],"{M1W},xb,d&o":["舅表姊"],"{M1W},xb,d&o,h":["舅表姊壻"],"{M1W},xb,d&l":["舅表妹"],"{M1W},xb,d&l,h":["舅表妹壻"],"{M1W},xb,d,s":["舅表甥男","甥男"],"{M1W},xb,d,s,w":["舅表甥妇","甥妇"],"{M1W},xb,d,d":["舅表甥女","甥女"],"{M1W},xb,d,d,h":["舅表甥婿","甥婿"],"{M1W},xs":["姨母","姨妈"],"{M1W},xs,h":["姨父","姨丈","姨夫"],"{M1W},xs,[s|d]":["姨表兄弟姊妹"],"{M1W},xs,s":["姨表兄弟"],"{M1W},xs,s,w":["姨表兄弟妇"],"{M1W},xs,s&o":["姨表兄"],"{M1W},xs,s&o,w":["姨表兄妇"],"{M1W},xs,s&l":["姨表弟"],"{M1W},xs,s&l,w":["姨表弟妇"],"{M1W},xs,s,s":["姨表侄男","侄男"],"{M1W},xs,s,s,w":["姨表侄妇","侄妇"],"{M1W},xs,s,d":["姨表侄女","侄女"],"{M1W},xs,s,d,h":["姨表侄婿","侄婿"],"{M1W},xs,d":["姨表姊妹"],"{M1W},xs,d,h":["姨表姊妹壻"],"{M1W},xs,d&o":["姨表姊"],"{M1W},xs,d&o,h":["姨表姊壻"],"{M1W},xs,d&l":["姨表妹"],"{M1W},xs,d&l,h":["姨表妹壻"],"{M1W},xs,d,s":["姨表甥男","甥男"],"{M1W},xs,d,s,w":["姨表甥妇","甥妇"],"{M1W},xs,d,d":["姨表甥女","甥女"],"{M1W},xs,d,d,h":["姨表甥婿","甥婿"],"{M1M},f":["祖父"],"{M1M},f,xb,s&o":["堂伯父"],"{M1M},f,xb,s&o,w":["堂伯母"],"{M1M},f,xb,s&l":["堂叔父"],"{M1M},f,xb,s&l,w":["堂叔母"],"{M1M},f,xb,d":["堂姑母"],"{M1M},f,xb,d,h":["堂姑父"],"{M1M},f,ob":["伯祖父"],"{M1M},f,ob,w":["伯祖母"],"{M1M},f,lb":["叔祖父"],"{M1M},f,lb,w":["叔祖母"],"{M1M},f,xs":["姑祖母"],"{M1M},f,xs,h":["姑祖父"],"{M1M},f,xs,s&o":["姑表伯父"],"{M1M},f,xs,s&o,w":["姑表伯母"],"{M1M},f,xs,s&l":["姑表叔父"],"{M1M},f,xs,s&l,w":["姑表叔母"],"{M1M},f,xs,d":["姑表姑母"],"{M1M},f,xs,d,h":["姑表姑父"],"{M1M},m":["祖母"],"{M1M},m,xb":["舅祖父"],"{M1M},m,xb,w":["舅祖母"],"{M1M},m,xb,s&o":["舅表伯父"],"{M1M},m,xb,s&o,w":["舅表伯母"],"{M1M},m,xb,s&l":["舅表叔父"],"{M1M},m,xb,s&l,w":["舅表叔母"],"{M1M},m,xb,d":["舅表姑母"],"{M1M},m,xb,d,h":["舅表姑父"],"{M1M},m,xs":["姨祖母"],"{M1M},m,xs,h":["姨祖父"],"{M1M},m,xs,s&o":["姨伯父"],"{M1M},m,xs,s&o,w":["姨伯母"],"{M1M},m,xs,s&l":["姨叔父"],"{M1M},m,xs,s&l,w":["姨叔母"],"{M1M},m,xs,d":["姨姑母"],"{M1M},m,xs,d,h":["姨姑父"],"{M1M},xb":["叔伯父"],"{M1M},xb,w":["叔伯母"],"{M1M},ob":["伯父"],"{M1M},ob,w":["伯母"],"{M1M},lb":["叔父"],"{M1M},lb,w":["叔母"],"{M1M},xb,[s|d]":["叔表兄弟姊妹"],"{M1M},xb,s":["叔表兄弟"],"{M1M},xb,s,w":["叔表兄弟妇"],"{M1M},xb,s&o":["叔表兄"],"{M1M},xb,s&o,w":["叔表兄妇"],"{M1M},xb,s&l":["叔表弟"],"{M1M},xb,s&l,w":["叔表弟妇"],"{M1M},xb,s,s":["叔表侄男","侄男"],"{M1M},xb,s,s,w":["叔表侄妇","侄妇"],"{M1M},xb,s,d":["叔表侄女","侄女"],"{M1M},xb,s,d,h":["叔表侄婿","侄婿"],"{M1M},xb,d":["叔表姊妹"],"{M1M},xb,d,h":["叔表姊妹壻"],"{M1M},xb,d&o":["叔表姊"],"{M1M},xb,d&o,h":["叔表姊壻"],"{M1M},xb,d&l":["叔表妹"],"{M1M},xb,d&l,h":["叔表妹壻"],"{M1M},xb,d,s":["叔表甥男","甥男"],"{M1M},xb,d,s,w":["叔表甥妇","甥妇"],"{M1M},xb,d,d":["叔表甥女","甥女"],"{M1M},xb,d,d,h":["叔表甥婿","甥婿"],"{M1M},xs":["姑母","姑妈"],"{M1M},xs,h":["姑父","姑丈","姑夫"],"{M1M},xs,[s|d]":["姑表兄弟姊妹"],"{M1M},xs,s":["姑表兄弟"],"{M1M},xs,s,w":["姑表兄弟妇"],"{M1M},xs,s&o":["姑表兄"],"{M1M},xs,s&o,w":["姑表兄妇"],"{M1M},xs,s&l":["姑表弟"],"{M1M},xs,s&l,w":["姑表弟妇"],"{M1M},xs,s,s":["姑表侄男","侄男"],"{M1M},xs,s,s,w":["姑表侄妇","侄妇"],"{M1M},xs,s,d":["姑表侄女","侄女"],"{M1M},xs,s,d,h":["姑表侄婿","侄婿"],"{M1M},xs,d":["姑表姊妹"],"{M1M},xs,d,h":["姑表姊妹壻"],"{M1M},xs,d&o":["姑表姊"],"{M1M},xs,d&o,h":["姑表姊壻"],"{M1M},xs,d&l":["姑表妹"],"{M1M},xs,d&l,h":["姑表妹壻"],"{M1M},xs,d,s":["姑表甥男","甥男"],"{M1M},xs,d,s,w":["姑表甥妇","甥妇"],"{M1M},xs,d,d":["姑表甥女","甥女"],"{M1M},xs,d,d,h":["姑表甥婿","甥婿"],"{M0},f":["父"],"{M0},f,f":["祖父"],"{M0},f,f,ob":["伯祖父"],"{M0},f,f,ob,w":["伯祖母"],"{M0},f,f,lb":["叔祖父"],"{M0},f,f,lb,w":["叔祖母"],"{M0},f,f,xs":["姑祖母"],"{M0},f,f,xs,h":["姑祖父"],"{M0},f,m":["祖母"],"{M0},f,m,xb":["舅祖父"],"{M0},f,m,xb,w":["舅祖母"],"{M0},f,m,xs":["姨祖母"],"{M0},f,m,xs,h":["姨祖父"],"{M0},f,ob":["伯父"],"{M0},f,ob,w":["伯母"],"{M0},f,lb":["叔父"],"{M0},f,lb,w":["叔母"],"{M0},f,xb,[s|d]":["叔表兄弟姊妹","叔表姊妹兄弟"],"{M0},f,xb,s":["叔表兄弟"],"{M0},f,xb,s,w":["叔表兄弟妇"],"{M0},f,xb,s&o":["叔表兄"],"{M0},f,xb,s&o,w":["叔表兄妇"],"{M0},f,xb,s&l":["叔表弟"],"{M0},f,xb,s&l,w":["叔表弟妇"],"{M0},f,xb,d":["叔表姊妹"],"{M0},f,xb,d,h":["叔表姊妹壻"],"{M0},f,xb,d&o":["叔表姊"],"{M0},f,xb,d&o,h":["叔表姊壻"],"{M0},f,xb,d&l":["叔表妹"],"{M0},f,xb,d&l,h":["叔表妹壻"],"{M0},f,xs":["姑母","姑妈"],"{M0},f,xs,h":["姑父","姑丈","姑夫"],"{M0},f,xs,[s|d]":["姑表兄弟姊妹","姑表姊妹兄弟"],"{M0},f,xs,s":["姑表兄弟"],"{M0},f,xs,s,w":["姑表兄弟妇"],"{M0},f,xs,s&o":["姑表兄"],"{M0},f,xs,s&o,w":["姑表兄妇"],"{M0},f,xs,s&l":["姑表弟"],"{M0},f,xs,s&l,w":["姑表弟妇"],"{M0},f,xs,d":["姑表姊妹"],"{M0},f,xs,d,h":["姑表姊妹壻"],"{M0},f,xs,d&o":["姑表姊"],"{M0},f,xs,d&o,h":["姑表姊壻"],"{M0},f,xs,d&l":["姑表妹"],"{M0},f,xs,d&l,h":["姑表妹壻"],"{M0},m":["母"],"{M0},m,f":["外祖父"],"{M0},m,f,ob":["伯外祖父"],"{M0},m,f,ob,w":["伯外祖母"],"{M0},m,f,lb":["叔外祖父"],"{M0},m,f,lb,w":["叔外祖母"],"{M0},m,f,xs":["姑外祖母"],"{M0},m,f,xs,h":["姑外祖父"],"{M0},m,m":["外祖母"],"{M0},m,m,xb":["舅外祖父"],"{M0},m,m,xb,w":["舅外祖母"],"{M0},m,m,xs":["姨外祖母"],"{M0},m,m,xs,h":["姨外祖父"],"{M0},m,xb":["舅父"],"{M0},m,xb,w":["舅母"],"{M0},m,xb,[s|d]":["舅表兄弟姊妹","舅表姊妹兄弟"],"{M0},m,xb,s":["舅表兄弟"],"{M0},m,xb,s,w":["舅表兄弟妇"],"{M0},m,xb,s&o":["舅表兄"],"{M0},m,xb,s&o,w":["舅表兄妇"],"{M0},m,xb,s&l":["舅表弟"],"{M0},m,xb,s&l,w":["舅表弟妇"],"{M0},m,xb,d":["舅表姊妹"],"{M0},m,xb,d,h":["舅表姊妹壻"],"{M0},m,xb,d&o":["舅表姊"],"{M0},m,xb,d&o,h":["舅表姊壻"],"{M0},m,xb,d&l":["舅表妹"],"{M0},m,xb,d&l,h":["舅表妹壻"],"{M0},m,xs":["姨母","姨妈"],"{M0},m,xs,h":["姨父","姨丈","姨夫"],"{M0},m,xs,[s|d]":["姨兄弟姊妹","姨姊妹兄弟"],"{M0},m,xs,s":["姨兄弟"],"{M0},m,xs,s,w":["姨兄弟妇"],"{M0},m,xs,s&o":["姨兄"],"{M0},m,xs,s&o,w":["姨兄妇"],"{M0},m,xs,s&l":["姨弟"],"{M0},m,xs,s&l,w":["姨弟妇"],"{M0},m,xs,d":["姨姊妹"],"{M0},m,xs,d,h":["姨姊妹壻"],"{M0},m,xs,d&o":["姨姊"],"{M0},m,xs,d&o,h":["姨姊壻"],"{M0},m,xs,d&l":["姨妹"],"{M0},m,xs,d&l,h":["姨妹壻"],"{M0},xb":["兄弟"],"{M0},xb,w":["兄弟妇"],"{M0},xb&o":["兄"],"{M0},xb&o,w":["兄妇","兄嫂","嫂子"],"{M0},xb&l":["弟"],"{M0},xb&l,w":["弟妇","弟妹"],"{M0},xb,s":["侄男","侄子","侄儿"],"{M0},xb,s,w":["侄妇"],"{M0},xb,d":["侄女"],"{M0},xb,d,h":["侄婿"],"{M0},xs":["姊妹"],"{M0},xs,h":["姊妹壻"],"{M0},xs&o":["姊"],"{M0},xs&o,h":["姊壻","姐夫"],"{M0},xs&l":["妹"],"{M0},xs&l,h":["妹壻","妹夫"],"{M0},xs,s":["甥男"],"{M0},xs,s,w":["甥妇"],"{M0},xs,d":["甥女"],"{M0},xs,d,h":["甥婿"],"{M-1},f":["兄弟"],"{M-1},f&o":["兄"],"{M-1},f&l":["弟"],"{M-1},f,f":["父"],"{M-1},f,f,f":["祖父"],"{M-1},f,f,m":["祖母"],"{M-1},f,f,ob":["伯父"],"{M-1},f,f,ob,w":["伯母"],"{M-1},f,f,lb":["叔父"],"{M-1},f,f,lb,w":["叔母"],"{M-1},f,m":["母"],"{M-1},f,m,f":["外祖父"],"{M-1},f,m,m":["外祖母"],"{M-1},f,xb":["叔兄弟"],"{M-1},f,xb,w":["叔兄弟妇"],"{M-1},f,ob":["叔兄"],"{M-1},f,ob,w":["叔兄妇"],"{M-1},f,lb":["叔弟"],"{M-1},f,lb,w":["叔弟妇"],"{M-1},f,xb,s":["叔男"],"{M-1},f,xb,d":["叔女"],"{M-1},f,xs":["姑姊妹"],"{M-1},f,xs,h":["姑姊妹壻"],"{M-1},f,os":["姑姊"],"{M-1},f,os,h":["姑姊壻"],"{M-1},f,ls":["姑妹"],"{M-1},f,ls,h":["姑妹壻"],"{M-1},f,xs,s":["姑男"],"{M-1},f,xs,d":["姑女"],"{M-1},m":["姊妹"],"{M-1},m&o":["姊"],"{M-1},m&l":["妹"],"{M-1},m,f":["父"],"{M-1},m,f,f":["祖父"],"{M-1},m,f,m":["祖母"],"{M-1},m,m":["母"],"{M-1},m,m,f":["外祖父"],"{M-1},m,m,m":["外祖母"],"{M-1},m,xb":["舅兄弟"],"{M-1},m,xb,w":["舅兄弟妇"],"{M-1},m,ob":["舅兄"],"{M-1},m,ob,w":["舅兄妇"],"{M-1},m,lb":["舅弟"],"{M-1},m,lb,w":["舅弟妇"],"{M-1},m,xb,s":["舅男"],"{M-1},m,xb,d":["舅女"],"{M-1},m,xs":["姨姊妹"],"{M-1},m,xs,h":["姨姊妹壻"],"{M-1},m,os":["姨姊"],"{M-1},m,os,h":["姨姊壻"],"{M-1},m,ls":["姨妹"],"{M-1},m,ls,h":["姨妹壻"],"{M-1},m,xs,s":["姨男"],"{M-1},m,xs,d":["姨女"],"{M-1},xb":["男"],"{M-1},xb,w":["妇"],"{M-1},xb,s":["孙男"],"{M-1},xb,s,w":["孙妇"],"{M-1},xb,d":["孙女"],"{M-1},xb,d,h":["孙婿"],"{M-1},xs":["女"],"{M-1},xs,h":["婿"],"{M-1},xs,s":["外孙男"],"{M-1},xs,s,w":["外孙妇"],"{M-1},xs,d":["外孙女"],"{M-1},xs,d,h":["外孙婿"],"{M-2},f":["男"],"{M-2},m":["女"],"{M-2},[f|m],f&o":["兄"],"{M-2},[f|m],f&l":["弟"],"{M-2},[f|m],m&o":["姊"],"{M-2},[f|m],m&l":["妹"],"{M-2},xb":["孙男"],"{M-2},xb,w":["孙妇"],"{M-2},xs":["孙女"],"{M-2},xs,h":["孙婿"]},i={"":["自己","我","俺","吾","本人","在下"],"f,f,f,f,f,f,f,f,f,f,f,f":["先祖父","先太爷","十二世祖"],"f,f,f,f,f,f,f,f,f,f,f,m":["先祖母","先太奶"],"f,f,f,f,f,f,f,f,f,f,f":["始祖父","始太爷","十一世祖"],"f,f,f,f,f,f,f,f,f,f,m":["始祖母","始太奶"],"f,f,f,f,f,f,f,f,f,f":["开祖父","开太爷","十世祖"],"f,f,f,f,f,f,f,f,f,m":["开祖母","开太奶"],"f,f,f,f,f,f,f,f,f":["鼻祖父","鼻太爷","九世祖"],"f,f,f,f,f,f,f,f,m":["鼻祖母","鼻太奶"],"f,f,f,f,f,f,f,f":["远祖父","远太爷","八世祖"],"f,f,f,f,f,f,f,m":["远祖母","远太奶"],"f,f,f,f,f,f,f":["太祖父","太太爷","七世祖"],"f,f,f,f,f,f,m":["太祖母","太太奶"],"f,f,f,f,f,f":["烈祖父","烈太爷","六世祖"],"f,f,f,f,f,m":["烈祖母","烈太奶"],"f,f,f,f,f":["天祖父","天太爷","五世祖"],"f,f,f,f,m":["天祖母","天太奶"],"f,f,f,f":["高祖父","外曾外曾外毑父","曾曾祖父","祖太公","祖太爷","高太爷","祖太翁","祖太爷爷","四世祖"],"f,f,f,m":["高祖母","外曾外曾外毑母","曾曾祖母","祖太婆","祖太奶","高太奶","祖太姆","祖太奶奶"],"f,f,m,f":["高外祖父","外曾外曾毑父","高外翁"],"f,f,m,m":["高外祖母","外曾外曾毑母","高外婆"],"f,m,f,f":["曾外曾祖父","外高外毑父"],"f,m,f,m":["曾外曾祖母","外高外毑母"],"f,m,m,f":["曾外曾外祖父","外高毑父"],"f,m,m,m":["曾外曾外祖母","外高毑母"],"m,f,f,f":["外高祖父","曾外曾外毑父"],"m,f,f,m":["外高祖母","曾外曾外毑母"],"m,f,m,f":["外高外祖父","曾外曾祖毑父"],"m,f,m,m":["外高外祖母","曾外曾祖毑母"],"m,m,f,f":["外曾外曾祖父","高外毑父"],"m,m,f,m":["外曾外曾祖母","高外毑母"],"m,m,m,f":["外曾外曾外祖父","高毑父"],"m,m,m,m":["外曾外曾外祖母","高毑母"],"f,f,f":["曾祖父","曾祖","外曾外毑父","太公","太爷","老太爷","太翁","太爷爷","曾爷爷","公太","佬嗲","祖爷","三世祖"],"f,f,m":["曾祖母","外曾外毑母","太婆","太奶","老太奶","太嬷","太姆","太奶奶","曾奶奶","婆太","老娭毑"],"f,m,f":["曾外祖父","曾外祖","外曾毑父","太外公","太外爷","太外翁","太外爷爷"],"f,m,m":["曾外祖母","外曾毑母","太外婆","太外奶","太外嬷","太外姆","太外奶奶"],"m,f,f":["外曾祖父","外曾祖","曾外毑父","外太公","外太爷","外太翁","外太爷爷"],"m,f,m":["外曾祖母","曾外毑母","外太婆","外太奶","外太嬷","外太姆","外太奶奶"],"m,m,f":["外曾外祖父","外曾外祖","曾毑父","外太外公","外太外爷","外太外翁","外太外爷爷","外太姥爷"],"m,m,m":["外曾外祖母","曾毑母","外太外婆","外太外奶","外太外嬷","外太外姆","外太外奶奶","外太姥姥"],"f,f":["爷爷","祖父","祖公","阿爷","阿公","奶爹","亚爷","亚公","依爷","大父","祖翁","嗲嗲","爷","祖君","奶爷","爷儿","爷老","爷老子","爷老倌","二世祖"],"f,m":["奶奶","祖母","祖婆","阿奶","阿婆","奶娘","亚嬷","亚婆","依奶","大母","祖嫲","嫲嫲","奶","重慈","阿嬷","婻婻","娭毑","嗯奶","娘姆","媪婆","亲婆"],"m,f":["外公","外祖父","姥爷","阿公","外爷","客公","毑父","毑公","姥公","舅家爷","嘎公","嘎爹","嘎嘎爹","嘎爷爷","尕公","毑爹","毑爷","外大父","姥爹","魏公","魏爷","简爷"],"m,m":["外婆","外祖母","姥姥","阿婆","外奶","客婆","毑母","毑婆","姥婆","舅家婆","嘎嘎","嘎婆","嘎嘎婆","嘎奶奶","尕婆","毑娘","毑毑","外大母","姥娘","魏婆","魏奶","简婆","阿嬷","外嬷","嫲嫲","好婆","嫏嫏","嫏娘","姥"],"f,f,ob":["伯公","伯祖","伯翁","大爷爷","大嗲","大爷","大公","大阿爷"],"f,f,ob,w":["伯婆","姆婆","大奶奶","伯娭毑"],"f,f,lb":["叔公","叔祖","叔翁","小爷爷","晚公","幺爷","细嗲"],"f,f,lb,w":["叔婆","婶婆","小奶奶","叔娭毑","晚婆","幺奶"],"f,f,xs":["姑奶奶","祖姑","姑奶","恩婆","姑娭毑"],"f,f,xs,h":["姑爷爷","祖姑丈","恩爹","姑丈公","丈公"],"f,m,ob":["大舅爷","大舅爹"],"f,m,ob,w":["大舅婆"],"f,m,lb":["小舅爷","小舅爹"],"f,m,lb,w":["小舅婆"],"f,m,xb":["舅爷爷","舅祖","舅爹","太舅父"],"f,m,xb,w":["舅奶奶","妗婆","舅婆","妗奶","太舅母"],"f,m,xs":["姨奶奶","姨奶","姨娭毑"],"f,m,xs,h":["姨爷爷","姨公公","姨爹","姨丈公","丈公"],"m,f,ob":["伯外公","外伯祖","伯外祖","大外公","大姥爷","大外爷"],"m,f,ob,w":["伯外婆","外姆婆","大外婆","大姥姥","大姥奶"],"m,f,lb":["叔外公","外叔祖","叔外祖","小外公","小姥爷","小外爷"],"m,f,lb,w":["叔外婆","外婶婆","小外婆","小姥姥","婶姥姥","小姥奶"],"m,f,xs":["姑外婆","姑婆","恩婆"],"m,f,xs,h":["姑外公","姑公","恩爹","外姑丈公","外丈公"],"m,m,xb":["舅外公","舅公","舅爹"],"m,m,xb,w":["舅外婆","舅婆","妗姥姥","妗姥娘","妗姥","外妗婆"],"m,m,xs":["姨外婆","姨婆"],"m,m,xs,h":["姨外公","姨公","外姨丈公","外丈公"],f:["爸爸","父亲","老父亲","老爸","阿爸","阿父","阿爹","老窦","爹地","依爹","老爹","老汉","老爷子","老子","牙老子","爸","父","爹","老汉儿","牙老倌","爸比","爹爹","爹啲","一世祖"],"f,ob":["伯父","伯伯","伯爸","阿伯","伯爷","依伯","伯儿","大伯","大爹","大爸","大爸爸","世父","大爷","大大","几伯","伯"],"f,ob,w":["伯母","伯妈","伯娘","依姆","世母","大娘","伯妇","大嬷","大妈","大妈妈","大姆妈","伯姐","姆"],"f,lb":["叔叔","叔父","叔爸","阿叔","叔爹","依叔","叔儿","小叔","小爹","小爸","小爸爸","仲父","季父","叔仔","几叔","叔"],"f,lb,w":["婶婶","叔母","叔妈","阿婶","叔娘","依婶","婶儿","小婶","小娘","小妈","小妈妈","仲母","季母","叔妇","几婶","婶","婶母","婶妈","婶娘","婶子","家婶","婶爹","嬢嬢"],"f,xb,s&o":["堂哥","堂老兄"],"f,xb,s&o,w":["堂嫂","堂兄嫂"],"f,xb,s&l":["堂弟","堂老弟"],"f,xb,s&l,w":["堂弟媳","堂弟妇","堂弟妹"],"f,xb,s,s":["堂侄","再从子"],"f,xb,s,s,w":["堂侄媳妇"],"f,xb,s,s,s":["堂侄孙","再从孙"],"f,xb,s,s,s,s":["堂曾孙","再曾孙"],"f,xb,s,s,s,s,s":["堂玄孙","再玄孙"],"f,xb,s,d":["堂侄女"],"f,xb,s,d,h":["堂侄女婿"],"f,xb,d&o":["堂姐","堂大姐"],"f,xb,d&o,h":["堂姐夫"],"f,xb,d&l":["堂妹","堂细妹"],"f,xb,d&l,h":["堂妹夫"],"f,xb,d,s":["堂外甥"],"f,xb,d,s,w":["堂外甥媳妇"],"f,xb,d,d":["堂外甥女"],"f,xb,d,d,h":["堂外甥女婿"],"f,os":["大姑","姑姊","姑嬷"],"f,os,h":["大姑丈","大姑夫","恩伯"],"f,ls":["小姑","姑姐","姑妹","姑仔","尕娘","幺姑姐","老姑"],"f,ls,h":["小姑丈","小姑夫","恩叔"],"f,xs":["姑妈","姑母","姑姑","恩妈","几姑","姑","嬢嬢","娘娘"],"f,xs,h":["姑丈","姑父","姑爸","恩爸","姑伯","姑爹","姑夫","姑婿","姑郎","亘"],"f,f,xb,s&o":["堂伯"],"f,f,xb,s&o,w":["堂伯母"],"f,f,xb,s&l":["堂叔"],"f,f,xb,s&l,w":["堂婶"],"f,f,xb,s":["堂伯叔父","堂叔伯","从父"],"f,f,xb,s,w":["堂伯叔母","从母"],"f,f,xb,s,s&o":["从堂兄"],"f,f,xb,s,s&l":["从堂弟"],"f,f,xb,s,s,s":["从堂侄","三从子"],"f,f,xb,s,s,s,s":["从堂侄孙","三从孙"],"f,f,xb,s,s,s,s,s":["从堂侄曾孙","三曾孙"],"f,f,xb,s,s,s,s,s,s":["从堂侄玄孙","三玄孙"],"f,f,xb,d":["堂姑"],"f,f,xb,d,h":["堂姑丈"],"f,f,f,xb":["伯叔曾祖父"],"f,f,f,xb,w":["伯叔曾祖母"],"f,f,f,xb,s":["堂伯叔祖父"],"f,f,f,xb,s,w":["堂伯叔祖母"],"f,f,f,xb,s,s&o":["从伯父"],"f,f,f,xb,s,s&o,w":["从伯母"],"f,f,f,xb,s,s&l":["从叔父"],"f,f,f,xb,s,s&l,w":["从叔母"],"f,f,f,xb,s,s":["从伯叔父","再从父"],"f,f,f,xb,s,s,w":["从伯叔母","再从母"],"f,f,f,xb,s,s,s&o":["族兄"],"f,f,f,xb,s,s,s&l":["族弟"],"f,f,f,xb,s,s,s,s":["族侄","四从子","族子"],"f,f,f,xb,s,s,s,s,s":["族侄孙","四从孙","族孙"],"f,f,f,xb,s,s,s,s,s,s":["族侄曾孙","四曾孙","族曾孙"],"f,f,f,xb,s,s,s,s,s,s,s":["族侄玄孙","四玄孙","族玄孙"],"f,f,f,f,xb":["伯叔高祖父"],"f,f,f,f,xb,w":["伯叔高祖母"],"f,f,f,f,xb,s":["堂伯叔曾祖父"],"f,f,f,f,xb,s,w":["堂伯叔曾祖母"],"f,f,f,f,xb,s,s":["从伯叔祖父"],"f,f,f,f,xb,s,s,w":["从伯叔祖母"],"f,f,f,f,xb,s,s,s&o":["族伯父"],"f,f,f,f,xb,s,s,s&o,w":["族伯母"],"f,f,f,f,xb,s,s,s&l":["族叔父"],"f,f,f,f,xb,s,s,s&l,w":["族叔母"],"f,f,f,f,xb,s,s,s":["族伯叔父","三从父","族父"],"f,f,f,f,xb,s,s,s,w":["族伯叔母","三从母","族母"],m:["妈妈","母亲","老母亲","老妈","阿妈","阿母","阿娘","老母","妈咪","依妈","老娘","老乸","老妈子","妈子","娘老子","妈","母","娘","阿毑","姆嬷","姆妈","娘亲"],"m,ob":["大舅","大舅舅","舅伯","元舅"],"m,ob,w":["大舅妈","大妗","舅嬷"],"m,lb":["小舅","小舅舅","舅仔","舅父仔","尕阿舅","老舅"],"m,lb,w":["小舅妈","小妗","细妗"],"m,xb":["舅舅","舅爸","舅父","舅爹","娘舅","母舅","阿舅","妗公","舅台","几舅","舅"],"m,xb,w":["舅妈","舅母","舅娘","娘妗","舅妻","舅姆","舅姆妈","舅媳妇","舅妇","舅姥","舅毑","老妗","妗子","妗妗","妗妗儿","妗爹","妗娘","妗爸","妗妈","妗母","阿妗","妗门","妗婆仔","妗儿妈","娘妗子","妗","嬢嬢"],"m,os":["大姨","姨嬷"],"m,os,h":["大姨丈","大姨父","大姨夫","姨伯"],"m,ls":["小姨","姨仔","老姨"],"m,ls,h":["小姨丈","小姨父","小姨夫","姨叔"],"m,xs":["姨妈","姨母","姨姨","姨娘","阿姨","从母","几姨","姨","嬢嬢"],"m,xs,h":["姨丈","姨父","姨夫","姨爸","姨爹","姨婿","姨郎","尹"],"m,f,xb,s":["堂舅"],"m,f,xb,s,w":["堂舅妈"],"m,f,xb,d":["堂姨"],"m,f,xb,d,h":["堂姨丈"],"h,f,f,f":["曾祖公父","曾祖公","太公翁"],"h,f,f,m":["曾祖婆母","曾祖婆","太奶亲"],"h,f,m,f":["曾外祖公父","曾外祖公"],"h,f,m,m":["曾外祖婆母","曾外祖婆"],"h,m,f,f":["外曾祖公父","外曾祖公"],"h,m,f,m":["外曾祖婆母","外曾祖婆"],"h,m,m,f":["外曾外祖公父","外曾外祖公"],"h,m,m,m":["外曾外祖婆母","外曾外祖婆"],"h,f,f,f,ob":["伯曾祖公父","伯曾祖公","太伯翁"],"h,f,f,f,ob,w":["伯曾祖婆母","伯曾祖婆","太姆婆"],"h,f,f,f,lb":["叔曾祖公父","叔曾祖公","太叔翁"],"h,f,f,f,lb,w":["叔曾祖婆母","叔曾祖婆","太婶婆"],"h,f,f,f,xs":["姑曾祖婆母","姑曾祖婆"],"h,f,f,f,xs,h":["姑曾祖公父","姑曾祖婆"],"h,f,f":["祖公父","祖公","祖公公","祖翁","奶公父"],"h,f,m":["祖婆母","祖婆","祖婆婆","奶婆母"],"h,m,f":["外祖公父","毑公父","外祖公","外祖公公","姥公父","姥公"],"h,m,m":["外祖婆母","毑婆母","外祖婆","外祖婆婆","姥婆母","姥婆"],"h,f":["公公","公父","家公","家爷","大官","老公公","老人公","大人公","公公爸","公爹","翁亲","君舅","老公爹","家官","老官","婆父","婆爹"],"h,m":["婆婆","婆母","家婆","家娘","大家","老婆婆","老人婆","大人婆","婆婆妈","婆妈","姑亲","君姑","婆母娘","婆子妈","阿姑"],"h,f,ob":["伯公父","伯公","伯翁","伯公公","伯祖","婆婆伯"],"h,f,ob,w":["伯婆母","伯婆","姆婆","伯婆婆","伯姆","婆婆伯姆"],"h,f,lb":["叔公父","叔公","叔翁","叔公公","叔祖","婆婆叔"],"h,f,lb,w":["叔婆母","叔婆","婶婆","婶婆婆","婶亲","婆婆婶子"],"h,f,xs":["姑婆母","姑婆","姑婆婆","婆婆姑"],"h,f,xs,h":["姑公父","姑公","姑公公","婆婆姑夫"],"h,m,xb":["舅公父","舅公","舅公公"],"h,m,xb,w":["舅婆母","舅婆","妗婆婆","舅婆婆"],"h,m,xs":["姨婆母","姨婆","姨婆婆"],"h,m,xs,h":["姨公父","姨公","姨公公"],h:["老公","丈夫","先生","夫","男人","新郎","爱爷","夫亲","夫君","官人","汉子","老头子","郎君","相公","夫婿","良人","老公仔","爱人","老伴","那口子","配偶","伴侣","伉俪","卿卿"],"h,ob":["大伯子","大伯儿","大伯兄","伯子","伯仔","伯兄","阿伯","大伯爷","伯爷子","婿伯"],"h,ob,w":["大婶子","大婶儿","大叔兄妇","伯兄妇","伯嫂","伯妇","伯姆","姒妇","姒姆","大伯嫂","姆姆","大姆","大伯妇","大伯娘","姐妇","阿姆"],"h,lb":["小叔子","小叔儿","小叔弟","叔子","叔仔","叔弟","阿叔","叔郎","小郎"],"h,lb,w":["小婶子","小婶儿","小叔弟妇","叔弟妇","叔嫂","叔妇","叔姆","娣妇","娣姆","小叔妇","婶婶","小婶","小婶婶"],"h,xb,s":["叔侄"],"h,xb,d":["叔侄女"],"h,os":["大姑子","大姑姐","大姑儿","大姑娘","姑姊","婆姐","婆婆姐","大娘姑"],"h,os,h":["大姑夫","大姑姐夫","大亘子","婆姐夫","婆婆姐夫"],"h,ls":["小姑子","小姑妹","小姑儿","小姑娘","姑妹","婆妹","婆婆妹"],"h,ls,h":["小姑夫","小姑妹夫","小亘子","婆妹夫","婆婆妹夫"],"h,xs":["姑子","夫姑"],"h,xs,h":["姑夫","姑郎"],"h,xs,s":["姑甥"],"h,xs,d":["姑甥女"],"w,f,f,f":["曾祖岳父","曾祖丈人","太爷丈人","祖爷丈人"],"w,f,f,m":["曾祖岳母","曾祖丈母","曾祖丈母娘","祖奶丈母娘","太奶丈母娘"],"w,f,m,f":["曾外祖岳父","曾外祖丈人","祖姥爷丈人","太姥爷丈"],"w,f,m,m":["曾外祖岳母","曾外祖丈母","曾外祖丈母娘","祖姥丈母娘","太姥丈母娘"],"w,m,f,f":["外曾祖岳父","外曾祖丈人","祖奶爷丈人","太奶爷丈人","祖姥爷丈人","太姥爷丈人"],"w,m,f,m":["外曾祖岳母","外曾祖丈母","太奶丈母娘","祖姥丈母娘","太姥丈母娘"],"w,m,m,f":["外曾外祖岳父","外曾外祖丈人","祖姥爷丈人","太姥爷丈人"],"w,m,m,m":["外曾外祖岳母","外曾外祖丈母","外曾外祖丈母娘","祖姥丈母娘","太姥丈母娘"],"w,f,f":["祖岳父","太岳父","奶岳父","祖丈人","爷丈人","奶爷丈人","奶丈爷","奶丈人","老丈爷"],"w,f,m":["祖岳母","太岳母","奶岳母","祖丈母","祖丈母娘","奶丈母娘","奶丈姥","奶丈母","老丈姥"],"w,f,ob":["伯岳父"],"w,f,ob,w":["伯岳母"],"w,f,lb":["叔岳父"],"w,f,lb,w":["叔岳母"],"w,f,f,xb,s&o":["姻伯丈"],"w,f,f,xb,s&o,w":["姻姆"],"w,f,f,xb,s&l":["姻叔丈"],"w,f,f,xb,s&l,w":["姻婶"],"w,m,f":["外祖岳父","毑岳父","外祖丈人爹","外祖丈人","外太岳父","姥岳父","姥丈爷","姥丈人","姥丈人爹","老丈爷","姥爷丈人"],"w,m,m":["外祖岳母","毑岳母","外祖丈母娘","外祖丈母","外太岳母","姥岳母","姥丈姥","姥丈母","姥丈母娘","老丈娘"],"w,f":["岳父","丈人","老丈人","外父","泰山","外舅","老亲爷","丈人爹","老干爷","丈人公","丈母爷","丈爷","丈爷爹","丈父","岳老子","老丈杆子","岳丈","岳翁","妻公","妇翁","冰翁"],"w,m":["岳母","丈母","老丈母","外母","泰水","外姑","老亲娘","丈人娘","老干娘","丈人婆","丈母娘","丈姥","丈姥娘","丈姆","岳母娘","丈母婆","丈姆婆","丈姆娘"],w:["老婆","妻子","媳妇","媳妇儿","媳妇子","太太","妻","女人","新娘","爱姥","妻亲","娘子","新娘子","夫人","婆娘","老太婆","内人","内子","内助","贤内助","爱妻","发妻","婆姨","婆子","老婆子","老婆儿","老婆仔","堂客","爱人","老伴","那口子","配偶","伴侣","伉俪","卿卿"],"w,ob":["大舅子","大舅哥","大舅佬","大阿舅","丈人兄","舅哥"],"w,ob,w":["大舅妇","大妗子","大妗儿","大舅姆","大舅兄嫂","大舅嫂","大舅姐","大舅媳妇","丈人嫂"],"w,lb":["小舅子","小舅弟","小舅佬","小阿舅","丈人弟","舅弟"],"w,lb,w":["小舅妇","小妗子","小妗儿","小舅姆","小舅弟妇","小舅嫂","舅弟媳","小舅妹","小舅媳妇"],"w,xb":["舅子","舅佬","妻舅","老婆舅","阿舅","亲家舅","舅老倌"],"w,xb,w":["舅嫂","舅妇","舅姆","妻妗","妗仔","妗子","妗儿"],"w,xb,s":["舅侄"],"w,xb,d":["舅侄女"],"w,os":["大姨子","大姨姐","大姨儿","姨姐"],"w,os,h":["大姨夫","大姨姐夫","姨姐夫","襟兄","大尹子"],"w,ls":["小姨子","小姨妹","小茙儿","姨妹","姨仔","姨妹子"],"w,ls,h":["小姨夫","小姨妹夫","姨妹夫","小茙夫","襟弟","小尹子"],"w,xs":["姨子","妻姨"],"w,xs,h":["连襟","姨夫","连桥","两桥","两乔","同门","僚婿","娅婿","连袂","连夹","姨夫爷","老襟","一担挑","老挑","挑担","担儿挑","连襟儿","襟兄弟","友婿","妻尹","娅"],"w,xs,s":["姨甥"],"w,xs,d":["姨甥女"],ob:["哥哥","哥","胞兄","亲哥","兄亲","老哥","依哥","阿哥","兄台","大佬","家兄","兄长","元兄","长兄","几哥"],"ob,w":["嫂子","嫂","嫂嫂","阿嫂","家嫂","兄姊","兄嫂","兄妇","兄妻","几嫂"],"ob,s":["侄子","兄子"],"ob,d":["侄女","兄女"],lb:["弟弟","弟","胞弟","亲弟","弟亲","老弟","依弟","阿弟","弟子","细佬","小弟","几弟"],"lb,w":["弟妹","弟媳","弟媳妇","弟媳妇子","弟新妇","老弟嫂"],"lb,s":["侄子","弟子"],"lb,d":["侄女","弟女"],"xb,s":["侄子","侄男","侄儿子","侄小子","嫡侄","亲侄","侄儿","侄仔","阿侄","老侄","侄"],"xb,s,w":["侄媳妇","侄媳","侄嫂","侄妇"],"xb,d":["侄女","侄囡","侄女儿","侄丫头","侄闺女"],"xb,d,h":["侄女婿","侄婿","侄郎"],os:["姐姐","姐","胞姐","亲姐","姊亲","老姐","依姐","阿姐","姊台","家姐","长姐","姊仔","几姐"],"os,h":["姐夫","姐丈","姐婿","姐郎","姊兄","姐夫哥","胞姐夫"],ls:["妹妹","妹","胞妹","亲妹","妹亲","老妹","依妹","阿妹","妹子","小妹","妹儿","几妹"],"ls,h":["妹夫","妹丈","妹婿","妹郎","妹弟","妹夫子","胞妹夫"],"xs,s":["外甥","甥子","甥男","甥儿","甥儿子","甥仔","甥"],"xs,s,w":["甥媳妇","甥媳","甥嫂","甥妇","甥儿息妇儿"],"xs,s,s":["甥孙","远甥","弥甥"],"xs,s,d":["甥孙女","远甥女","弥甥女"],"xs,d":["外甥女","甥女","甥囡","甥女儿","甥闺女"],"xs,d,h":["甥女婿","甥婿","甥郎","甥儿息婿儿"],s:["儿子","男儿","息男","闺男","囝囝","囝男","囝儿","小子","娃子","男亲","伢子","长子","次子","幼子","儿","仔","囝","子","阿仔","仔仔","后生","公子","少爷","一世孙"],"s,w":["儿媳","儿媳妇","息妇儿","儿媳妇儿","新妇","新妇囝","心抱","息妇","儿妇","子妇","小妇","少奶奶","少夫人"],"s,w,f":["亲家公"],"s,w,f,f&o":["姻伯"],"s,w,f,f&l":["姻叔"],"s,w,m":["亲家母"],"s,w,xb":["姻侄","世侄"],"s,w,xb,w":["姻侄媳"],"s,w,xb,s":["姻侄孙"],"s,w,xb,d":["姻侄孙女"],"s,w,xs":["姻侄女"],"s,w,xs,h":["姻侄婿"],"s,w,xs,s":["姻侄外孙"],"s,w,xs,d":["姻侄外孙女"],"s,s":["孙子","孙男","孙男儿","孙儿","长孙","嗣孙","孙仔","孙囝","孙娃子","孙伢子","二世孙"],"s,s,w":["孙媳妇","孙媳","孙妇","孙息妇","孙新妇"],"s,s,s":["曾孙","曾孙男","重孙","重孙子","息仔","三世孙"],"s,s,s,w":["曾孙妇","重孙媳妇"],"s,s,s,s":["玄孙","元孙","膀孙","重重孙","四世孙"],"s,s,s,s,w":["玄孙媳妇"],"s,s,s,s,s":["来孙","五世孙"],"s,s,s,s,s,w":["来孙媳妇"],"s,s,s,s,s,s":["晜孙","昆孙","六世孙"],"s,s,s,s,s,s,w":["晜孙媳妇"],"s,s,s,s,s,s,s":["仍孙","礽孙","七世孙"],"s,s,s,s,s,s,s,w":["仍孙媳妇"],"s,s,s,s,s,s,s,s":["云孙","八世孙"],"s,s,s,s,s,s,s,s,w":["云孙媳妇"],"s,s,s,s,s,s,s,s,s":["耳孙","远孙","裔孙","季孙","九世孙"],"s,s,s,s,s,s,s,s,s,w":["耳孙媳妇"],"s,s,s,s,s,s,s,s,s,s":["弥孙","十世孙"],"s,s,s,s,s,s,s,s,s,s,w":["弥孙媳妇"],"s,s,s,s,s,s,s,s,s,s,s":["胎孙","十一世孙"],"s,s,s,s,s,s,s,s,s,s,s,w":["胎孙媳妇"],"s,s,s,s,s,s,s,s,s,s,s,s":["承孙","十二世孙"],"s,s,s,s,s,s,s,s,s,s,s,s,w":["承孙媳妇"],"s,s,s,s,s,s,s,s,s,s,s,d":["承孙女"],"s,s,s,s,s,s,s,s,s,s,s,d,h":["承孙女婿"],"s,s,s,s,s,s,s,s,s,s,d":["胎孙女"],"s,s,s,s,s,s,s,s,s,s,d,h":["胎孙女婿"],"s,s,s,s,s,s,s,s,s,s,d,s":["承外孙"],"s,s,s,s,s,s,s,s,s,s,d,s,w":["承外孙媳妇"],"s,s,s,s,s,s,s,s,s,s,d,d":["承外孙女"],"s,s,s,s,s,s,s,s,s,s,d,d,h":["承外孙女婿"],"s,s,s,s,s,s,s,s,s,d":["弥孙女"],"s,s,s,s,s,s,s,s,s,d,h":["弥孙女婿"],"s,s,s,s,s,s,s,s,s,d,s":["胎外孙"],"s,s,s,s,s,s,s,s,s,d,s,w":["胎外孙媳妇"],"s,s,s,s,s,s,s,s,s,d,d":["胎外孙女"],"s,s,s,s,s,s,s,s,s,d,d,h":["胎外孙女婿"],"s,s,s,s,s,s,s,s,d":["耳孙女"],"s,s,s,s,s,s,s,s,d,h":["耳孙女婿"],"s,s,s,s,s,s,s,s,d,s":["弥外孙"],"s,s,s,s,s,s,s,s,d,s,w":["弥外孙媳妇"],"s,s,s,s,s,s,s,s,d,d":["弥外孙女"],"s,s,s,s,s,s,s,s,d,d,h":["弥外孙女婿"],"s,s,s,s,s,s,s,d":["云孙女"],"s,s,s,s,s,s,s,d,h":["云孙女婿"],"s,s,s,s,s,s,s,d,s":["耳外孙"],"s,s,s,s,s,s,s,d,s,w":["耳外孙媳妇"],"s,s,s,s,s,s,s,d,d":["耳外孙女"],"s,s,s,s,s,s,s,d,d,h":["耳外孙女婿"],"s,s,s,s,s,s,d":["仍孙女","礽孙女"],"s,s,s,s,s,s,d,h":["仍孙女婿"],"s,s,s,s,s,s,d,s":["云外孙"],"s,s,s,s,s,s,d,s,w":["云外孙媳妇"],"s,s,s,s,s,s,d,d":["云外孙女"],"s,s,s,s,s,s,d,d,h":["云外孙女婿"],"s,s,s,s,s,d":["晜孙女"],"s,s,s,s,s,d,h":["晜孙女婿"],"s,s,s,s,s,d,s":["仍外孙"],"s,s,s,s,s,d,s,w":["仍外孙媳妇"],"s,s,s,s,s,d,d":["仍外孙女"],"s,s,s,s,s,d,d,h":["仍外孙女婿"],"s,s,s,s,d":["来孙女"],"s,s,s,s,d,h":["来孙女婿"],"s,s,s,s,d,s":["晜外孙"],"s,s,s,s,d,s,w":["晜外孙媳妇"],"s,s,s,s,d,d":["晜外孙女"],"s,s,s,s,d,d,h":["晜外孙女婿"],"s,s,s,d":["玄孙女","元孙女","膀孙女"],"s,s,s,d,h":["玄孙女婿"],"s,s,s,d,s":["来外孙"],"s,s,s,d,s,w":["来外孙媳妇"],"s,s,s,d,d":["来外孙女"],"s,s,s,d,d,h":["来外孙女婿"],"s,s,d":["曾孙女","重孙女","息女"],"s,s,d,h":["曾孙女婿"],"s,s,d,s":["玄外孙"],"s,s,d,s,w":["玄外孙媳妇"],"s,s,d,d":["玄外孙女"],"s,s,d,d,h":["玄外孙女婿"],"s,d":["孙女","孙女儿","孙囡","孙囡儿","女孙","孙女子"],"s,d,h":["孙女婿","孙婿","孙郎","孙息婿"],"s,d,s":["曾外孙","外息仔"],"s,d,s,w":["曾外孙媳妇"],"s,d,s,s":["曾外曾孙"],"s,d,s,s,w":["曾外曾孙媳妇"],"s,d,s,d":["曾外曾孙女"],"s,d,s,d,h":["曾外曾孙女婿"],"s,d,d":["曾外孙女","外息女"],"s,d,d,h":["曾外孙女婿"],"s,d,d,s":["曾外曾外孙"],"s,d,d,s,w":["曾外曾外孙媳妇"],"s,d,d,d":["曾外曾外孙女"],"s,d,d,d,h":["曾外曾外孙女婿"],d:["女儿","千金","小姐","掌上明珠","息女","闺女","囡囡","囡女","囡儿","乖囡","囡嗯","丫头","姑娘","妮子","女亲","长女","次女","幼女","女","阿女","女女"],"d,h":["女婿","姑爷","姑爷儿","女婿子","女婿儿","儿婿","子婿","息婿","小婿","快婿","郎婿","郎婿子","息婿儿","囝婿","囡婿","东床","半子","甥馆","女夫"],"d,h,f":["亲家公"],"d,h,f,f&o":["姻伯"],"d,h,f,f&l":["姻叔"],"d,h,m":["亲家母"],"d,h,xb":["姻侄","世侄"],"d,h,xb,w":["姻侄媳"],"d,h,xb,s":["姻侄孙"],"d,h,xb,d":["姻侄孙女"],"d,h,xs":["姻侄女"],"d,h,xs,h":["姻侄婿"],"d,h,xs,s":["姻侄外孙"],"d,h,xs,d":["姻侄外孙女"],"d,s":["外孙","外孙子","外孙儿"],"d,s,w":["外孙媳妇","外孙妇","外孙新妇"],"d,s,s":["外曾孙","重外孙","外息仔"],"d,s,s,w":["外曾孙媳妇","外曾孙妇"],"d,s,s,s":["外玄孙","外元孙","外膀孙"],"d,s,s,s,w":["外玄孙媳妇"],"d,s,s,d":["外玄孙女","外元孙女","外膀孙女"],"d,s,s,d,h":["外玄孙女婿"],"d,s,d":["外曾孙女","重外孙女","外息女"],"d,s,d,h":["外曾孙女婿","重外孙女婿"],"d,s,d,s":["外玄外孙"],"d,s,d,s,w":["外玄外孙媳妇"],"d,s,d,d":["外玄外孙女"],"d,s,d,d,h":["外玄外孙女婿"],"d,d":["外孙女","外孙囡","外孙女儿"],"d,d,h":["外孙女婿","外孙婿","外孙郎"],"d,d,s":["外曾外孙","外息仔"],"d,d,s,w":["外曾外孙媳妇"],"d,d,s,s":["外曾外曾孙"],"d,d,s,s,w":["外曾外曾孙媳妇"],"d,d,s,d":["外曾外曾孙女"],"d,d,s,d,h":["外曾外曾孙女婿"],"d,d,d":["外曾外孙女","外息女"],"d,d,d,h":["外曾外孙女婿"],"d,d,d,s":["外曾外曾外孙"],"d,d,d,s,w":["外曾外曾外孙媳妇"],"d,d,d,d":["外曾外曾外孙女"],"d,d,d,d,h":["外曾外曾外孙女婿"],"1,xb,w,xb":["叔眷兄弟"],"1,xb,w,xb,s":["叔眷舅男"],"1,xb,w,xb,d":["叔眷舅女"],"1,xb,w,xs":["叔眷姊妹"],"1,xb,w,xs,s":["叔眷姨男"],"1,xb,w,xs,d":["叔眷姨女"],"1,xb,s":["从男","从子"],"1,xb,s,s":["从孙"],"1,xb,s,s,s":["从曾孙"],"1,xb,s,s,s,s":["从玄孙"],"1,xb,s,w":["从妇"],"1,xb,d":["从女","从子"],"1,xb,d,h":["从婿"],"1,xs,h,xb":["姑姻兄弟"],"1,xs,h,xb,s":["姑姻叔男"],"1,xs,h,xb,d":["姑姻叔女"],"1,xs,h,xs":["姑姻姊妹"],"1,xs,h,xs,s":["姑姻姑男"],"1,xs,h,xs,d":["姑姻姑女"],"1,xs,s,s":["离孙男","离孙子"],"1,xs,s,d":["离孙女"],"0,xb,w,xb":["舅眷兄弟"],"0,xb,w,xb,s":["舅眷舅男"],"0,xb,w,xb,d":["舅眷舅女"],"0,xb,w,xs":["舅眷姊妹"],"0,xb,w,xs,s":["舅眷姨男"],"0,xb,w,xs,d":["舅眷姨女"],"0,xs,h,xb":["姨姻兄弟"],"0,xs,h,xb,s":["姨姻叔男"],"0,xs,h,xb,d":["姨姻叔女"],"0,xs,h,xs":["姨姻姊妹"],"0,xs,h,xs,s":["姨姻姑男"],"0,xs,h,xs,d":["姨姻姑女"],"0,xb,s":["娘家侄子","娘家侄"],"0,xb,s,s":["归孙男","归孙子"],"0,xb,s,d":["归孙女"],"0,xb,d":["娘家侄女"],"0,xs,s":["姨甥","姨甥男","从男","从子"],"0,xs,s,w":["从妇"],"0,xs,d":["姨甥女","从女","从子"],"0,xs,d,h":["从婿"],"0,xs,s,s":["姨甥孙","姨孙","姨甥孙男","姨孙男"],"0,xs,s,d":["姨甥孙女","姨孙女"],"0,xs,d,s":["姨甥外孙","姨外孙","姨甥外孙男","姨外孙男"],"0,xs,d,d":["姨甥外孙女","姨外孙女"]},u=M({"[f,f|f,m|m,f],[f,m],f":["老太奶爷","祖太奶爷"],"[f,f|f,m|m,f],[f,m],m":["老太奶奶","祖太奶奶"],"[f,m|m,f|m,m],[f,m],f":["老太姥爷","祖太姥爷"],"[f,m|m,f|m,m],[f,m],m":["老太姥姥","祖太姥姥"],"[f|m],[f|m],f":["太老爷"],"[f|m],[f|m],f,ob":["伯太老爷"],"[f|m],[f|m],f,ob,w":["伯太老姥"],"[f|m],[f|m],f,lb":["叔太老爷"],"[f|m],[f|m],f,lb,w":["叔太老姥"],"[f|m],[f|m],f,xs":["姑太老姥"],"[f|m],[f|m],f,xs,h":["姑太老爷"],"[f|m],[f|m],m":["太老姥"],"[f|m],[f|m],m,xb":["舅太老爷"],"[f|m],[f|m],m,xb,w":["舅太老姥"],"[f|m],[f|m],m,xs":["姨太老姥"],"[f|m],[f|m],m,xs,h":["姨太老爷"],"[f,f|f,m|m,f],f":["太奶爷","祖奶爷","祖爷爷"],"[f,f|f,m|m,f],f,ob":["伯太奶爷","太伯奶爷"],"[f,f|f,m|m,f],f,ob,w":["伯太奶奶","太伯奶奶"],"[f,f|f,m|m,f],f,lb":["叔太奶爷","太叔奶爷"],"[f,f|f,m|m,f],f,lb,w":["叔太奶奶","太叔奶奶"],"[f,f|f,m|m,f],f,xs":["姑太奶奶","太姑奶奶"],"[f,f|f,m|m,f],f,xs,h":["姑太奶爷","太姑奶爷"],"[f,f|f,m|m,f],m":["太奶奶","祖奶奶"],"[f,f|f,m|m,f],m,xb":["舅太奶爷","太舅奶爷"],"[f,f|f,m|m,f],m,xb,w":["舅太奶奶","太舅奶奶"],"[f,f|f,m|m,f],m,xs":["姨太奶奶","太姨奶奶"],"[f,f|f,m|m,f],m,xs,h":["姨太奶爷","太姨奶爷"],"[f,m|m,f|m,m],f":["太姥爷","祖姥爷","太毑爷"],"[f,m|m,f|m,m],f,ob":["伯太姥爷","伯叔姥爷"],"[f,m|m,f|m,m],f,ob,w":["伯太姥姥","太伯姥姥"],"[f,m|m,f|m,m],f,lb":["叔太姥爷","太叔姥爷"],"[f,m|m,f|m,m],f,lb,w":["叔太姥姥","太叔姥姥"],"[f,m|m,f|m,m],f,xs":["姑太姥姥","太姑姥姥"],"[f,m|m,f|m,m],f,xs,h":["姑太姥爷","太姑姥爷"],"[f,m|m,f|m,m],m":["太姥姥","祖姥姥","太毑毑","太姥"],"[f,m|m,f|m,m],m,xb":["舅太姥爷","太舅姥爷"],"[f,m|m,f|m,m],m,xb,w":["舅太姥姥","太舅姥姥"],"[f,m|m,f|m,m],m,xs":["姨太姥姥","太姨姥姥"],"[f,m|m,f|m,m],m,xs,h":["姨太姥爷","太姨姥爷"],"[f|m],[f|m],[f|m]":["曾祖辈","祖祖","老太","阿太"],"[f|m],[f|m]":["祖辈"],"[f|m],f":["老爷"],"[f|m],f,ob":["伯老爷"],"[f|m],f,ob,w":["伯老姥"],"[f|m],f,lb":["叔老爷"],"[f|m],f,lb,w":["叔老姥"],"[f|m],f,xs":["姑老姥"],"[f|m],f,xs,h":["姑老爷"],"[f|m],m":["老姥"],"[f|m],m,xb":["舅老爷"],"[f|m],m,xb,w":["舅老姥"],"[f|m],m,xs":["姨老姥"],"[f|m],m,xs,h":["姨老爷"],"f,f,[f|m]":["曾祖父母"],"f,f,[f,xs|m,xb],s":["舅姑爷爷","舅姑爷"],"f,[f|m]":["祖父母","爷爷奶奶"],"f,[ob|ob,w]":["伯父母"],"f,[lb|lb,w]":["叔父母"],"f,xb,[s|d]":["堂兄弟姐妹","堂姐妹兄弟","从父兄弟姐妹"],"f,[xs|xs,h]":["姑父母"],"f,xs,[s|d]":["姑表兄弟姐妹"],"m,[f|m],f":["老外公","老外爷","老姥爷"],"m,[f|m],m,":["老外婆","老外奶","老姥姥","老姥娘","老嫏娘"],"m,[f|m]":["外祖父母","外公外婆","姥姥姥爷"],"m,f,[f,xs|m,xb],s":["舅姑姥爷"],"m,[xb|xb,w]":["舅父母"],"m,xb,[s|d]":["舅表兄弟姐妹"],"m,[xs|xs,h]":["姨父母"],"m,xs,[s|d]":["姨兄弟姐妹","姨姐妹兄弟","从母兄弟姐妹"],"[f|m]":["父母","爹娘","爹妈","爸妈","爸爸妈妈","父母亲","双亲","二亲","两亲","二老","高堂"],"[f|m],[f,xs|m,xb],s":["舅姑爸","姑舅爸"],"[f|m],[f,xs|m,xb],s&o,w":["舅姑姆","姑舅姆"],"[f|m],[f,xs|m,xb],s&l,w":["舅姑婶","姑舅婶"],"[f|m],[f,xs|m,xb],d":["姑舅娘娘"],"[f|m],m,xs,s":["两姨爸"],"[f|m],m,xs,s&o,w":["两姨姆"],"[f|m],m,xs,s&l,w":["两姨婶"],"[f|m],m,xs,d":["两姨娘娘"],"w,[f|m]":["岳父母","岳父岳母","丈人丈母","舅姑"],"w,f,[ob|ob,w]":["伯岳父母"],"w,f,[lb|lb,w]":["叔岳父母"],"w,f,[xs|xs,h]":["姑岳父母"],"w,m,[xb|xb,w]":["舅岳父母"],"w,m,[xs|xs,h]":["姨岳父母"],"w,[f,xs|m,xb],d":["姑舅姨子"],"w,[f,xs|m,xb],d,h":["姑舅连襟","姑舅连桥"],"h,[f|m]":["公婆","翁姑","姑翁","姑舅","大家官","公公婆婆","姑章","姑嫜"],"h,f,[ob|ob,w]":["伯公婆"],"h,f,[lb|lb,w]":["叔公婆"],"h,f,[xs|xs,h]":["姑公婆"],"h,m,[xb|xb,w]":["舅公婆"],"h,m,[xs|xs,h]":["姨公婆"],"[xb|xs]":["兄弟姐妹","同胞","同胞兄弟姐妹","手足"],"[ob|os]":["哥哥姐姐"],"[lb|ls]":["弟弟妹妹"],"[ob|ob,w]":["哥哥嫂嫂","兄嫂"],"[f,xb|m,xs],[s|d]":["从兄弟姐妹","从姐妹兄弟"],"[f,xs|m,xb],[s|d]":["表兄弟姐妹","表姐妹兄弟","老表","阿表"],"[f,xs|m,xb],s":["姑舅兄弟","舅姑兄弟"],"[f,xs|m,xb],s&o":["姑舅哥","姑舅哥哥"],"[f,xs|m,xb],s&l":["姑舅弟","姑舅弟弟"],"[f,xs|m,xb],d":["姑舅姊妹","舅姑姊妹"],"[f,xs|m,xb],d&o":["姑舅姐","姑舅姐姐"],"[f,xs|m,xb],d&l":["姑舅妹","姑舅妹妹"],"[f,xs|m,xb],s,s":["姑舅儿子"],"[f,xs|m,xb],s,d":["姑舅女儿"],"[xb|xs],[s|d]":["侄甥"],"xb,[s|d]":["侄子女","侄子侄女"],"xs,[s|d]":["甥子女","外甥子女"],"[w|s|d]":["妻儿","妻小"],"[w|d]":["妻女"],"[s|d]":["子女","儿女","仔女","小孩","孩子","孩子们","孩儿","小孩儿","宝宝","宝贝","娃","娃子","儿辈","子辈","细伢","伢子","子息","子嗣","崽","幺儿"],"[s|d],[s|d]":["孙辈","孙息","孙枝"],"s,[s|d]":["孙子女"],"d,[s|d]":["外孙子女"],"s#xb,s":["子侄"],"s#s,w":["子媳"],"[s|d]#[s|d],[s|d]":["儿孙","子孙","孙息"],"[s,w|d,h],[f|m]":["亲家","儿女亲家"],"[s,w|d,h],f":["亲家公","亲家父","亲家翁","亲家世翁","姻翁"],"[s,w|d,h],f,f":["太姻翁"],"[s,w|d,h],f,m":["太姻姆"],"[s,w|d,h],f,f,f":["太姻翁"],"[s,w|d,h],f,f,m":["太姻姆"],"[s,w|d,h],f,f,ob":["姻伯翁"],"[s,w|d,h],f,f,ob,w":["姻伯姆"],"[s,w|d,h],f,f,lb":["姻叔翁"],"[s,w|d,h],f,f,lb,w":["姻叔母"],"[s,w|d,h],f,f,xb,s&o":["姻家兄"],"[s,w|d,h],f,f,xb,s&o,w":["姻家兄妇"],"[s,w|d,h],f,f,xb,s&l":["姻家弟"],"[s,w|d,h],f,f,xb,s&l,w":["姻家弟妇"],"[s,w|d,h],f,f,xb,s,s":["姻家侄"],"[s,w|d,h],f,f,xb,s,s,w":["姻家侄妇"],"[s,w|d,h],f,ob":["姻兄"],"[s,w|d,h],f,ob,w":["姻兄妇"],"[s,w|d,h],f,lb":["姻弟"],"[s,w|d,h],f,lb,w":["姻弟妇"],"[s,w|d,h],f,xb,s":["姻侄"],"[s,w|d,h],f,xb,s,w":["姻侄妇"],"[s,w|d,h],m":["亲家母","亲家婆","亲家姆","亲姆","姻姆"],"[s,w|d,h],m,ob":["姻仁兄"],"[s,w|d,h],m,ob,w":["姻仁兄妇"],"[s,w|d,h],m,lb":["姻仁弟"],"[s,w|d,h],m,lb,w":["姻仁弟妇"],"[s,w|d,h],[f|m],f":["姻太翁"],"[s,w|d,h],[f|m],m":["姻太姆"]}),G={},p=function(s){G[s]={};var f=function(f){K(f).forEach((function(x){G[s][x]=a[s][f]}))};for(var x in a[s])f(x)};for(var $ in a)p($);var W={},v=function(s){K(s).forEach((function(f){W[f]=c[s]}))};for(var g in c)v(g);var y=function(s,f){var x=new Map,d=function(){var d=m.match(/\{.+?\}/)[0],b=f[m],o=function(){var f=s[d][r],o=m.replace(d,r);if(!["h,h","w,w","w,h","h,w"].some((function(s){return o.includes(s)}))){var e=f.flatMap((function(s){return b.map((function(f){return f.includes("?")?f.replace("?",s):s+f}))})),t=x.get(o)||u.get(o)||[];x.set(o,e.concat(t))}};for(var r in s[d])o()};for(var m in f)d();return x}(G,W);for(var S in y.forEach((function(s,f){u.set(f,s)})),i){var E=u.get(S)||[];u.set(S,[].concat(x(i[S]),x(E)))}u.set("o",["passer-by.com","作者"]);var A={w:["妻","内","岳","岳家","丈人"],h:["夫","外","公","婆家","婆婆"]},j=new Set(x(u.values()).flat());u.forEach((function(s,f){if(f.match(/^[fm]/)||f.match(/^[olx][bs]$|^[olx][bs],[^mf]/)){var x=function(){var s=d+","+f;if(f.match(/[fm]/)){var x=s.replace(/,[ol]([sb])(,[wh])?$/,",x$1$2").replace(/(,[sd])&[ol](,[wh])?$/,"$1$2");if(x!=s&&u.has(x))return 1}u.has(s)||u.set(s,[]);var m=A[d],b=u.get(f),o=u.get(s);m.forEach((function(f){b.forEach((function(x){var d=f+x;j.has(d)||(o.push(d),u.set(s,o))}))}))};for(var d in A)x()}}));var N={},I=new Map(u);function O(s,f){if(!s)return[""];var x={f:["d","s"],m:["d","s"],h:["w",""],w:["","h"],s:["m","f"],d:["m","f"],lb:["os","ob"],ob:["ls","lb"],xb:["xs","xb"],ls:["os","ob"],os:["ls","lb"],xs:["xs","xb"]},d="";s.match(/&o$/)?d="&l":s.match(/&l$/)&&(d="&o"),s=s.replace(/&[ol\d+]/g,""),f<0&&(s.match(/^w/)?f=1:s.match(/^h/)&&(f=0));var m=function(f){var m=(","+f+","+s).replace(/,[fhs]|,[olx]b/g,",1").replace(/,[mwd]|,[olx]s/g,",0"),b=m.slice(0,m.length-2).split(",").reverse(),o=s.split(",").reverse().map((function(s,f){return x[s][b[f]]})).join(",");return o+(C(o)?"":d)};return f<0?[m(1),m(0)]:[m(f)]}function T(s){var f=s.filter((function(s){return s===s.replace(/[ol](?=[s|b])/g,"x").replace(/&[ol]/,"")}));return s.filter((function(s){var x=s.replace(/[ol](?=[s|b])/g,"x").replace(/&[ol]/,"");return f.includes(s)||s!=x&&!f.includes(x)})).filter((function(s,f,x){return x.indexOf(s)===f}))}function C(s){var f={f:1,m:1,s:-1,d:-1},x=0;return s.split(",").forEach((function(s){var d=s.replace(/&[ol\d]+/,"");x+=f[d]||0})),x}function U(s){var f=[],x=function(s){var f=[],x=s.replace(/(,[sd])(,[wh])?$/,"$1&o$2"),d=s.replace(/(,[sd])(,[wh])?$/,"$1&l$2");return I.has(x)&&I.has(d)?f=[x,d]:I.has(s)&&(f=[s]),T(f).map((function(s){return I.get(s)[0]}))};if(s.match(/&([\d]+)(,[hw])?$/)){var d=function(s){var f="",x={1:"大",99:"小"};if(x[s])f=x[s];else{var d=~~(s/10),m=s%10;f=(d?(h[d]+"十").replace("一十","十"):"")+h[m]}return f}(s.match(/&([\d]+)(,[hw])?$/)[1]);if(s=s.replace(/&\d+/g,""),n[s])f.push(n[s][0].replace("几",d));else if(I.has(s)){var m=C(s),b="";m<3&&!s.match(/[hw],/)&&(I.get(s).forEach((function(s){!b&&s.includes("几")&&(b=s.replace("几",d))})),b||(b=(b=I.get(s)[0]).match(/^[大小]/)?b.replace(/^[大小]/,d):d+b)),f.push(b)}}if(f.length||(f=x(s=s.replace(/&\d+/g,""))),f.length||(f=x(s=s.replace(/&[ol]/g,""))),f.length||(f=x(s=s.replace(/[ol](b|s)/g,"x$1"))),!f.length){var o=s.replace(/x/g,"l"),r=s.replace(/x/g,"o");f=f.concat(x(r),x(o))}return f}var k=new Map(I);function z(s){var f=arguments.length>1&&void 0!==arguments[1]?arguments[1]:-1,x=s.split(",").map((function(s){var f=s.replace(/&[ol\d]+/,"");return k.get(f)[0]})).join("的");return f>-1&&k.has(f+","+s)&&(0==f?x="(女性)"+x:1==f&&(x="(男性)"+x)),x}k.set("xb",["兄弟"]),k.set("xs",["姐妹"]);var q=l(I,M({xb:["兄弟","亲兄弟","同胞兄弟"],"xb,w":["兄弟媳妇","兄弟妇"],xs:["姐妹","亲姐妹","同胞姐妹"],"xs,h":["姐妹夫","姊妹婿"],"f,xb":["伯叔父"],"f,xb,w":["伯叔母"],"f,f,xb":["从祖祖父","从祖父"],"f,f,xb,w":["从祖祖母","从祖母"],"m,f,xb":["外从祖祖父"],"m,f,xb,w":["外从祖祖母"],"h,xb":["伯叔"],"h,xb,w":["妯娌","娣姒","娣姒姊妹","婶子"]}));q=l(q,M(n));var B=new Map;function D(s,f){var x="undefined"!=typeof Symbol&&s[Symbol.iterator]||s["@@iterator"];if(!x){if(Array.isArray(s)||(x=function(s,f){if(s){if("string"==typeof s)return F(s,f);var x={}.toString.call(s).slice(8,-1);return"Object"===x&&s.constructor&&(x=s.constructor.name),"Map"===x||"Set"===x?Array.from(s):"Arguments"===x||/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(x)?F(s,f):void 0}}(s))||f&&s&&"number"==typeof s.length){x&&(s=x);var d=0,m=function(){};return{s:m,n:function(){return d>=s.length?{done:!0}:{done:!1,value:s[d++]}},e:function(s){throw s},f:m}}throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}var b,o=!0,r=!1;return{s:function(){x=x.call(s)},n:function(){var s=x.next();return o=s.done,s},e:function(s){r=!0,b=s},f:function(){try{o||null==x.return||x.return()}finally{if(r)throw b}}}}function F(s,f){(null==f||f>s.length)&&(f=s.length);for(var x=0,d=Array(f);x<f;x++)d[x]=s[x];return d}q.forEach((function(s,f){s.forEach((function(s){var x=B.get(s)||[];x.push(f),B.set(s,x)}))}));function H(s){(s=s.replace(/之/g,"的").replace(/吾之?(.+)/,"$1").replace(/我的?(.+)/,"$1")).match(/[^娘婆岳亲]家的?(孩子|儿子|女儿)/)&&(s=s.replace(/家的?/,"的"));for(var f=(s=(s=(s=s.replace(/(舅|姑)+(爸|父|丈|妈|母)?家的?(哥|姐|弟|妹)+/,"$1表$3").replace(/(舅|姑)+(爸|父|丈|妈|母)?家的?/,"$1表")).replace(/(伯|叔)+(父|母)?家的?(哥|姐|弟|妹)+/,"堂$3").replace(/(伯|叔)+(父|母)?家的?/,"堂")).replace(/姨+(爸|父|丈|妈|母)?家的?(哥|姐|弟|妹)+/,"姨$2").replace(/姨+(爸|父|丈|妈|母)?家的?/,"姨")).split("的"),x=[],d=!0,m=function(){var s=f.shift(),m=[],b=[s],o=function(s){for(var f in r.forEach((function(f){f.arr.forEach((function(x){var d=s.replace(f.exp,x);d!=s&&(b.push(d),o(d))}))})),e){var x=s.replace(f,e[f]),d=s.replace(e[f],f);x!=s&&b.push(x),d!=s&&b.push(d)}};o(s);var l=[[],[],[]];b.forEach((function(s){var f=(s=s.replace(/^[尕幺细满碎晚末尾幼]/,"小")).match(/^[大|小]|^[一|二|三|四|五|六|七|八|九|十]+/);if(f){var x=s.replace(f[0],"几"),d=s.replace(f[0],""),b=function(s){var f=0,x={"大":1,"小":99};if(x[s])f=x[s];else{var d=t(s.replace(/^十/,"一十").split("十").map((function(s){return h.indexOf(s)})).reverse(),2),m=d[0],b=d[1];f=10*(void 0===b?0:b)+m}return f}(f[0]);[x,d,s].forEach((function(s,f){var x=B.get(s);x&&x.length&&x.forEach((function(x){var d=x.replace(/(,[hw])$/,"&"+b+"$1").replace(/([^hw]+)$/,"$1&"+b);x.match(/^[mf,]+$/)||s.match(/^[从世]/)||l[f].push(d)}))}))}m=m.concat(B.get(s)||[])})),l.forEach((function(s){m.length||(m=s)})),m.length||(d=!1);var M=[];x.length||(x=[""]),x.forEach((function(s){m.forEach((function(f){M.push(s+(f?","+f:""))}))})),x=M};f.length;)m();return d?T(x):[]}function J(s){var f=s.from,x=s.to,d=s.sex;if(d<0){var m=f.match(/^,[w1]/)?1:f.match(/^,[h0]/)?0:-1,b=x.match(/^,[w1]/)?1:x.match(/^,[h0]/)?0:-1;if(-1===m&&b>-1)d=b;else if(m>-1&&-1===b)d=m;else{if(m!==b)return[];d=m}}var o=L(s.from,d),r=L(s.to,d);if(!o.length||!r.length)return[];var e=[];return o.forEach((function(f){r.forEach((function(x){var m=d,b=","+x;if(b.match(/,([fhs1](&[ol\d]+)?|[olx]b)(&[ol\d]+)?$/)&&(m=1),b.match(/,([mwd0](&[ol\d]+)?|[olx]s)(&[ol\d]+)?$/)&&(m=0),f&&x){var o=s.optimal;if((f.match(/&\d+/)||x.match(/&\d+/))&&(o=!0),o){var r=function(s){for(var f=s.from,x=s.to,d=s.sex,m=f.split(","),b=x.split(","),o=0;o<m.length&&o<b.length;o++){if(m[o]!=b[o]){if(C(m[o])==C(b[o])&&m[o].match(/^[xol][bs]|^[sd]/)&&b[o].match(/^[xol][bs]|^[sd]/)){var r,e,t,h;if(m[o].replace(/&([ol\d]+)/,"").replace(/^[xol]([bs])/,"$1")!=b[o].replace(/&([ol\d]+)/,"").replace(/^[xol]([bs])/,"$1"))break;var l=(null===(r=m[o].match(/&([ol\d]+)/))||void 0===r?void 0:r[1])||(null===(e=m[o].match(/([ol])[bs]/))||void 0===e?void 0:e[1])||"",M=(null===(t=b[o].match(/&([ol\d]+)/))||void 0===t?void 0:t[1])||(null===(h=b[o].match(/([ol])[bs]/))||void 0===h?void 0:h[1])||"";if(l&&M)isNaN(l)||isNaN(M)?!isNaN(l)&&"o"==M||"l"==l&&!isNaN(M)?m[o]=m[o].replace(/^[xol]b|^s/,"lb").replace(/^[xol]s|^d/,"ls"):(!isNaN(l)&&"l"==M||"o"==l&&!isNaN(M))&&(m[o]=m[o].replace(/^[xol]b|^s/,"ob").replace(/^[xol]s|^d/,"os")):+l>+M?m[o]=m[o].replace(/^[xol]b|^s/,"lb").replace(/^[xol]s|^d/,"ls"):+l<+M&&(m[o]=m[o].replace(/^[xol]b|^s/,"ob").replace(/^[xol]s|^d/,"os")),f=m.slice(o).join(","),x=b.slice(o+1).join(","),d=b[o].match(/^([fhs1](&[ol\d]+)?|[olx]b)(&[ol\d]+)?/)?1:0;else if(s.optimal){var w,n;if(l=(null===(w=m[o].match(/([xol])[bs]/))||void 0===w?void 0:w[1])||"",M=(null===(n=b[o].match(/([xol])[bs]/))||void 0===n?void 0:n[1])||"","x"==l||"x"==M){f=m.slice(o+1).join(","),x=b.slice(o+1).join(","),d=m[o].match(/^([fhs1](&[ol\d]+)?|[olx]b)(&[ol\d]+)?/)?1:0;continue}}}break}f=m.slice(o+1).join(","),x=b.slice(o+1).join(","),d=m[o].match(/^([fhs1](&[ol\d]+)?|[olx]b)(&[ol\d]+)?/)?1:0}return{from:f,to:x,sex:d}}({from:f,to:x,sex:d,optimal:s.optimal});f=r.from,x=r.to,d=r.sex}}(x?O(x,d):[""]).forEach((function(s){var x=(s?","+s:"")+(f?","+f:"");e.push({selector:x,sex:m})}))}))})),e}function K(s){var f=[],x={},d=function(s){if(!x[s]){x[s]=!0;var m="";do{m=s;var b,r=D(o);try{for(r.s();!(b=r.n()).done;){var e=b.value;if((s=s.replace(e.exp,e.str)).includes("#"))return s.split("#").forEach(d),!1}}catch(s){r.e(s)}finally{r.f()}}while(m!=s);if(s.match(/,[mwd0](&[ol\d+])?,w|,[hfs1](&[ol\d]+)?,h/))return!1;f.push(s)}};return d(s),f}function L(s,f){if(s.match(/^,/)||(s=","+s),f<0)s.match(/^,[w1]/)?f=1:s.match(/^,[h0]/)&&(f=0);else{if(1==f&&s.match(/^,[h0]/))return[];if(0==f&&s.match(/^,[w1]/))return[]}if(f>-1&&!s.includes(",1")&&!s.includes(",0")&&(s=","+f+s),s.match(/,[mwd0](&[ol\d]+)?,w|,[hfs1](&[ol\d]+)?,h/))return[];var x=K(s).map((function(s){return s.replace(/,[01]/,"").substr(1)}));return T(x)}var P=function(s){"string"==typeof s&&(s=function(s){var f,x=m(d);try{for(x.s();!(f=x.n()).done;){var b=f.value,o=s.match(b.exp);if(o)return b.opt(o)}}catch(s){x.e(s)}finally{x.f()}return{}}(s));var f,b=Object.assign({text:"",target:"",sex:-1,type:"default",reverse:!1,mode:"default",optimal:!1},s);f=b.mode,I=new Map(u),f&&N[f]&&N[f].forEach((function(s,f){var d=u.get(f)||[];I.set(f,[].concat(x(s),x(d)))}));var o=H(b.text),r=H(b.target);r.length||(r=[""]);var e=o.flatMap((function(s){return r.flatMap((function(f){return J({from:s,to:f,sex:b.sex,optimal:b.optimal}).flatMap((function(s){return(s?L(s.selector,s.sex):[]).flatMap((function(f){var x=[f],d=s.sex;return b.reverse&&(x=O(f,d),d=f.match(/([fhs1](&[ol\d]+)?|[olx]b)$/)?1:0),"chain"===b.type?x.map((function(s){return z(s,d)})).filter((function(s){return s})):"pair"===b.type?O(f,s.sex).flatMap((function(s){return function(s,f){s=s.replace(/&\d+/g,""),f=f.replace(/&\d+/g,"");var x=s.replace(/([ol])([bs])/g,"x$2"),d=f.replace(/([ol])([bs])/g,"x$2"),m=s.replace(/&[ol]/g,""),b=f.replace(/&[ol]/g,""),o=[],r=[],e=[];for(var t in w){var h=t.split("#");if(h.length>1){var l=L(h[0]),M=L(h[1]),n=l.map((function(s){return s.replace(/&[ol\d]+/,"").replace(/([ol])([bs])/,"x$2")})),a=M.map((function(s){return s.replace(/&[ol\d]+/,"").replace(/([ol])([bs])/,"x$2")}));(l.includes(s)&&M.includes(f)||l.includes(f)&&M.includes(s))&&o.push(w[t][0]),(n.includes(x)&&a.includes(d)||n.includes(d)&&a.includes(x))&&r.push(w[t][0]),(n.includes(m)&&a.includes(b)||n.includes(b)&&a.includes(m))&&e.push(w[t][0])}}return o.length||(o=r),o.length||(o=e),o}(f,s)})):x.flatMap((function(s){var f=U(s);return f.length||(f=U(d+","+s)),f}))}))}))}))}));return x(new Set(e))};return P.data=I,P.dataCount=I.size,P.setMode=function(s,f){var x=N[s]||new Map;N[s]=l(x,M(f))},P}));
+</script>
+<script>/* 家族树 v3 · 全景分层布局版
+ * 数据模型：{ id, name, sex, parents[], stepParents[], spouses[], birth, death, deceased, note }
+ * 存储键与 v1/v2 共用，数据互通。
+ */
+(function () {
+  'use strict';
+
+  var STORE_KEY = 'jiashu_family_tree_v1';
+
+  /* ================= 数据层 ================= */
+  var persons = [];
+  var mainId = null;
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(persons)); } catch (e) {}
+  }
+
+  function normalizeList(arr) {
+    if (!Array.isArray(arr)) return [];
+    var out = [], seen = {};
+    arr.forEach(function (v) {
+      var id = typeof v === 'string' ? v : (v && v.id);
+      if (id && !seen[id]) { seen[id] = 1; out.push(id); }
+    });
+    return out;
+  }
+
+  function normalizeAll() {
+    persons = persons.filter(function (p) { return p && typeof p === 'object'; });
+    var ids = {};
+    persons.forEach(function (p) { if (p.id) ids[p.id] = 1; });
+    persons.forEach(function (p) {
+      p.parents = normalizeList(p.parents).filter(function (i) { return ids[i] && i !== p.id; });
+      p.stepParents = normalizeList(p.stepParents).filter(function (i) {
+        return ids[i] && i !== p.id && p.parents.indexOf(i) < 0;
+      });
+      p.spouses = normalizeList(p.spouses).filter(function (i) { return ids[i] && i !== p.id; });
+      if (p.sex !== 'M' && p.sex !== 'F') p.sex = 'M';
+      p.name = (p.name == null ? '' : String(p.name));
+      p.birth = p.birth == null ? '' : String(p.birth);
+      p.death = p.death == null ? '' : String(p.death);
+      p.note = p.note == null ? '' : String(p.note);
+      p.deceased = !!p.deceased || !!String(p.death).trim();
+    });
+    // 配偶双向补齐
+    persons.forEach(function (p) {
+      p.spouses.forEach(function (sid) {
+        var q = getPerson(sid);
+        if (q && q.spouses.indexOf(p.id) < 0) q.spouses.push(p.id);
+      });
+    });
+  }
+
+  function load() {
+    try { persons = JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
+    catch (e) { persons = []; }
+    if (!Array.isArray(persons)) persons = [];
+    normalizeAll();
+    netLayoutCache = null;
+    try { mainId = localStorage.getItem(STORE_KEY + '_main') || null; } catch (e) { mainId = null; }
+  }
+
+  function getPerson(id) {
+    for (var i = 0; i < persons.length; i++) if (persons[i].id === id) return persons[i];
+    return null;
+  }
+  function idxOf(id) {
+    for (var i = 0; i < persons.length; i++) if (persons[i].id === id) return i;
+    return -1;
+  }
+  function childrenOf(id) {
+    return persons.filter(function (p) { return p.parents.indexOf(id) >= 0; })
+      .map(function (p) { return p.id; });
+  }
+  function allParentsOf(p) { return p.parents.concat(p.stepParents || []); }
+  function sexLabel(s) { return s === 'M' ? '男' : '女'; }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function newId() { return 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
+
+  function isDescendantOf(ancestorId, nodeId) {
+    var stack = [nodeId], seen = {};
+    while (stack.length) {
+      var cur = stack.pop();
+      if (seen[cur]) continue;
+      seen[cur] = 1;
+      var kids = childrenOf(cur);
+      for (var i = 0; i < kids.length; i++) {
+        if (kids[i] === ancestorId) return true;
+        stack.push(kids[i]);
+      }
+    }
+    return false;
+  }
+
+  /* ================= 代际计算 =================
+   * 约束：子女 ≥ 父母 + 1；配偶同代（双向）。
+   * 若数据自相矛盾（如同一人既是某人的继父又是其配偶），约束会形成正环 → 无限递增。
+   * 处理：迭代超过人数轮仍未收敛即判定为正环，回退为「只按亲子分层 + 配偶一次性对齐」。
+   */
+  function computeGenerations() {
+    var gen = {}, i, n = persons.length;
+    if (!n) return gen;
+
+    function parentsOnly() {
+      gen = {};
+      persons.forEach(function (p) { gen[p.id] = 0; });
+      for (var it = 0; it < n + 2; it++) {
+        var changed = false;
+        for (var k = 0; k < persons.length; k++) {
+          var p = persons[k];
+          var ps = allParentsOf(p), mx = null;
+          for (var j = 0; j < ps.length; j++) {
+            var g = gen[ps[j]];
+            if (g === undefined) continue;
+            if (mx === null || g > mx) mx = g;
+          }
+          if (mx !== null && gen[p.id] < mx + 1) { gen[p.id] = mx + 1; changed = true; }
+        }
+        if (!changed) break;
+      }
+    }
+
+    parentsOnly();
+
+    // 配偶同代（取较大者，保证不违反亲子下界）
+    function alignSpouses() {
+      persons.forEach(function (p) {
+        (p.spouses || []).forEach(function (sid) {
+          if (gen[sid] === undefined) return;
+          var m = Math.max(gen[p.id], gen[sid]);
+          gen[p.id] = m;
+          gen[sid] = m;
+        });
+      });
+    }
+
+    // 完整的「亲子 + 配偶」联合求解，检测正环
+    var gen2 = {};
+    persons.forEach(function (p) { gen2[p.id] = 0; });
+    var converged = false;
+    for (var it2 = 0; it2 < n + 2; it2++) {
+      var changed2 = false;
+      for (i = 0; i < persons.length; i++) {
+        var p2 = persons[i];
+        var ps2 = allParentsOf(p2), mx2 = null;
+        for (var j2 = 0; j2 < ps2.length; j2++) {
+          var g2 = gen2[ps2[j2]];
+          if (g2 === undefined) continue;
+          if (mx2 === null || g2 > mx2) mx2 = g2;
+        }
+        if (mx2 !== null && gen2[p2.id] < mx2 + 1) { gen2[p2.id] = mx2 + 1; changed2 = true; }
+      }
+      for (i = 0; i < persons.length; i++) {
+        var q2 = persons[i];
+        for (var k2 = 0; k2 < q2.spouses.length; k2++) {
+          var sid2 = q2.spouses[k2];
+          if (gen2[sid2] === undefined) continue;
+          var m2 = Math.max(gen2[q2.id], gen2[sid2]);
+          if (gen2[q2.id] !== m2) { gen2[q2.id] = m2; changed2 = true; }
+          if (gen2[sid2] !== m2) { gen2[sid2] = m2; changed2 = true; }
+        }
+      }
+      // 无父母、无配偶但有子女的人（如单亲家长）：紧贴最年幼子女上一代。
+      // 关键：有配偶者必须跳过——他们已由「配偶同代」对齐保证正确；若在此处再压低，会与上方
+      // 配偶对齐互相振荡（永久不收敛 → 走 fallback），最终把子女压在与父母同代（朱林/朱晓雨 bug 根因）。
+      for (i = 0; i < persons.length; i++) {
+        var p3 = persons[i];
+        if (p3.parents.length || (p3.stepParents || []).length) continue;
+        if (p3.spouses && p3.spouses.length) continue;
+        var kids3 = childrenOf(p3.id);
+        if (!kids3.length) continue;
+        var mn = null;
+        for (var k3 = 0; k3 < kids3.length; k3++) {
+          var kk = gen2[kids3[k3]];
+          if (mn === null || kk < mn) mn = kk;
+        }
+        if (mn !== null && gen2[p3.id] !== mn - 1) { gen2[p3.id] = mn - 1; changed2 = true; }
+      }
+      if (!changed2) { converged = true; break; }
+    }
+
+    if (converged) {
+      gen = gen2;
+    } else {
+      // 矛盾数据（如「既是继父又是配偶」形成正环）：亲子为主、配偶为辅反复松弛，
+      // 并保证子女永不低于父母，杜绝「子女与父母同代」。
+      parentsOnly();
+      for (var fb = 0; fb < n + 2; fb++) {
+        alignSpouses();
+        var chF = false;
+        persons.forEach(function (p) {
+          var ps = allParentsOf(p), mx = null;
+          for (var j = 0; j < ps.length; j++) { var g = gen[ps[j]]; if (g === undefined) continue; if (mx === null || g > mx) mx = g; }
+          if (mx !== null && gen[p.id] < mx + 1) { gen[p.id] = mx + 1; chF = true; }
+        });
+        if (!chF) break;
+      }
+    }
+
+    var min = null;
+    persons.forEach(function (p) { if (min === null || gen[p.id] < min) min = gen[p.id]; });
+    if (min === null) min = 0;
+    persons.forEach(function (p) { gen[p.id] -= min; });
+    return gen;
+  }
+
+  /* ================= 横向顺序（家族 DFS） ================= */
+  function computeOrder(gen) {
+    var order = {}, counter = 0;
+    function take(id) { if (order[id] === undefined) order[id] = counter++; }
+    function dfs(id, depth) {
+      if (depth > 60 || order[id] !== undefined) return;
+      take(id);
+      var p = getPerson(id);
+      if (!p) return;
+      // 配偶紧跟（夫妻相邻）
+      p.spouses.forEach(function (sid) { if (getPerson(sid)) take(sid); });
+      // 子女
+      childrenOf(id)
+        .sort(function (a, b) { return idxOf(a) - idxOf(b); })
+        .forEach(function (cid) {
+          if (order[cid] === undefined) dfs(cid, depth + 1);
+        });
+    }
+    // 从最上代、无父母的成员起（并让有子女者优先，形成主干）
+    var roots = persons.filter(function (p) { return allParentsOf(p).length === 0; })
+      .sort(function (a, b) {
+        var ca = childrenOf(a.id).length, cb = childrenOf(b.id).length;
+        if (ca !== cb) return cb - ca;
+        return idxOf(a.id) - idxOf(b.id);
+      });
+    roots.forEach(function (p) { dfs(p.id, 0); });
+    persons.forEach(function (p) { if (order[p.id] === undefined) dfs(p.id, 0); });
+    return order;
+  }
+
+  /* ================= 保序回归（PAVA） ================= */
+  function pava(v) {
+    var blocks = [];
+    for (var i = 0; i < v.length; i++) {
+      blocks.push({ s: v[i], n: 1 });
+      while (blocks.length > 1) {
+        var b = blocks[blocks.length - 1], a = blocks[blocks.length - 2];
+        if (a.s / a.n <= b.s / b.n) break;
+        blocks.pop(); blocks.pop();
+        blocks.push({ s: a.s + b.s, n: a.n + b.n });
+      }
+    }
+    var out = [];
+    blocks.forEach(function (b) { for (var k = 0; k < b.n; k++) out.push(b.s / b.n); });
+    return out;
+  }
+
+  /* ================= 布局 ================= */
+  var CARD_W = 112, CARD_H = 44;
+  var GAP_X = CARD_W + 22;      // 同代最小间距（含卡片宽）
+  var ROW_H = 122;
+  var PAD = 46;
+
+  function computeLayout() {
+    var gen = computeGenerations();
+    var order = computeOrder(gen);
+    var x = {}, y = {};
+
+    var rows = {};
+    persons.forEach(function (p) {
+      var g = gen[p.id];
+      (rows[g] || (rows[g] = [])).push(p.id);
+    });
+    var gens = Object.keys(rows).map(Number).sort(function (a, b) { return a - b; });
+    gens.forEach(function (g) {
+      rows[g].sort(function (a, b) { return (order[a] || 0) - (order[b] || 0); });
+      y[g] = g * ROW_H;
+    });
+
+    // 初始 x
+    gens.forEach(function (g) {
+      rows[g].forEach(function (id, i) { x[id] = i * GAP_X; });
+    });
+
+    function idealFor(id, dir) {
+      var p = getPerson(id), refs = [];
+      if (dir === 'down') {
+        allParentsOf(p).forEach(function (pid) {
+          if (gen[pid] !== undefined && gen[pid] < gen[id] && x[pid] !== undefined) refs.push(x[pid]);
+        });
+      } else {
+        childrenOf(id).forEach(function (cid) {
+          if (x[cid] !== undefined) refs.push(x[cid]);
+        });
+      }
+      if (!refs.length) return undefined;
+      refs.sort(function (a, b) { return a - b; });
+      return refs.length % 2
+        ? refs[(refs.length - 1) / 2]
+        : (refs[refs.length / 2 - 1] + refs[refs.length / 2]) / 2;
+    }
+
+    function relaxRow(ids, dir) {
+      var target = {};
+      ids.forEach(function (id) {
+        var t = idealFor(id, dir);
+        if (t !== undefined) target[id] = t;
+      });
+      // 配偶优先：夫妻必须相邻。后出现的一方跟随先出现的一方（覆盖父母/子女算出的目标）
+      ids.forEach(function (id) {
+        var p = getPerson(id);
+        for (var i = 0; i < p.spouses.length; i++) {
+          var sid = p.spouses[i];
+          if (gen[sid] !== gen[id] || target[sid] === undefined) continue;
+          if ((order[sid] || 0) < (order[id] || 0)) {
+            // 我是对方的第几个同代配偶（按顺序），依次右排
+            var peers = getPerson(sid).spouses.filter(function (x) {
+              return gen[x] === gen[sid] && (order[x] || 0) <= (order[id] || 0);
+            }).sort(function (a, b) { return (order[a] || 0) - (order[b] || 0); });
+            var k = peers.indexOf(id);
+            if (k < 0) k = 0;
+            target[id] = target[sid] + (k + 1) * GAP_X;
+            break;
+          }
+        }
+      });
+      if (!Object.keys(target).length) return;
+      var base = ids.map(function (id) {
+        return target[id] !== undefined ? target[id] : x[id];
+      });
+      var z = base.map(function (v, i) { return v - i * GAP_X; });
+      var zz = pava(z);
+      ids.forEach(function (id, i) { x[id] = zz[i] + i * GAP_X; });
+    }
+
+    for (var round = 0; round < 3; round++) {
+      for (var gi = 1; gi < gens.length; gi++) relaxRow(rows[gens[gi]], 'down');       // 子女靠父母
+      for (var gj = gens.length - 2; gj >= 0; gj--) relaxRow(rows[gens[gj]], 'up');    // 父母靠子女
+    }
+
+    // 归一化 + 外框
+    var minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+    persons.forEach(function (p) {
+      if (x[p.id] < minX) minX = x[p.id];
+      if (x[p.id] > maxX) maxX = x[p.id];
+      if (y[gen[p.id]] > maxY) maxY = y[gen[p.id]];
+    });
+    if (!isFinite(minX)) { minX = 0; maxX = 0; maxY = 0; }
+    persons.forEach(function (p) { x[p.id] = x[p.id] - minX + PAD; });
+
+    var nodes = persons.map(function (p) {
+      return { id: p.id, p: p, x: x[p.id], y: y[gen[p.id]] + PAD, gen: gen[p.id] };
+    });
+
+    return {
+      nodes: nodes, gen: gen,
+      w: (maxX - minX) + CARD_W + PAD * 2,
+      h: maxY + CARD_H + PAD * 2,
+      rows: gens.length
+    };
+  }
+
+  /* ================= 渲染：连线 ================= */
+  function buildConnectors(layout) {
+    var byId = {};
+    layout.nodes.forEach(function (n) { byId[n.id] = n; });
+
+    var couple = [], kids = [], step = [];
+
+    // 夫妻线
+    var seen = {};
+    persons.forEach(function (p) {
+      p.spouses.forEach(function (sid) {
+        var q = getPerson(sid);
+        if (!q) return;
+        var key = [p.id, sid].sort().join('|');
+        if (seen[key]) return;
+        seen[key] = 1;
+        var a = byId[p.id], b = byId[sid];
+        if (!a || !b || Math.abs(a.y - b.y) > 1) return; // 跨代不画横线
+        couple.push({ a: a, b: b });
+      });
+    });
+
+    // 亲子：按父母组合分组，画 T 型总线；每组分配一个家族色（用于区分重叠的家庭）
+    var FAM_COLORS = ['#5b8def', '#e0558b', '#2faa72', '#e0932f', '#9b6dd6', '#1fa9b8', '#d6675b', '#6b8f3a', '#c2529b', '#3a7fbf'];
+    var famIdx = 0;
+    var groups = {}, farLinks = [];
+    persons.forEach(function (c) {
+      var cn = byId[c.id];
+      if (!cn) return;
+      var ps = c.parents.filter(function (pid) { return byId[pid]; });
+      if (!ps.length) return;
+      var key = ps.slice().sort().join('|');
+      if (!groups[key]) groups[key] = { parents: ps.map(function (id) { return byId[id]; }), kids: [], color: FAM_COLORS[famIdx++ % FAM_COLORS.length] };
+      groups[key].kids.push(cn);
+    });
+    Object.keys(groups).forEach(function (key) {
+      var g = groups[key];
+      var pxs = g.parents.map(function (n) { return n.x + CARD_W / 2; });
+      var parentBottom = Math.max.apply(null, g.parents.map(function (n) { return n.y + CARD_H; }));
+      var busX = pxs.reduce(function (a, b) { return a + b; }, 0) / pxs.length;
+
+      // 被配偶吸走、离父母很远的子女：单独用虚线弧表示，避免长横线横穿全图
+      // 阈值取 3 张卡宽左右：主干分支（如爸爸）仍走实线，只有真正被拉走的（如嫁入的妻子）才用虚线
+      var near = [], far = [];
+      g.kids.forEach(function (k) {
+        if (Math.abs(k.x + CARD_W / 2 - busX) > 420) far.push(k); else near.push(k);
+      });
+      far.forEach(function (k) {
+        farLinks.push({ fromX: busX, fromY: parentBottom, toX: k.x + CARD_W / 2, toY: k.y, color: g.color });
+      });
+      if (!near.length) return;
+
+      var xs = near.map(function (k) { return k.x + CARD_W / 2; });
+      var minK = Math.min.apply(null, xs.concat([busX]));
+      var maxK = Math.max.apply(null, xs.concat([busX]));
+      var minKidTop = Math.min.apply(null, near.map(function (k) { return k.y; }));
+      var busY = Math.max(parentBottom + 22, Math.min(parentBottom + 52, minKidTop - 26));
+      kids.push({
+        busX: busX, busY: busY, parentBottom: parentBottom,
+        lineLeft: minK, lineRight: maxK, color: g.color,
+        kids: near.map(function (k) { return { cx: k.x + CARD_W / 2, y: k.y }; })
+      });
+    });
+
+    // 继亲：虚线
+    persons.forEach(function (c) {
+      var cn = byId[c.id];
+      if (!cn) return;
+      (c.stepParents || []).forEach(function (pid) {
+        var pn = byId[pid];
+        if (!pn) return;
+        step.push({ x1: pn.x + CARD_W / 2, y1: pn.y + CARD_H, x2: cn.x + CARD_W / 2, y2: cn.y });
+      });
+    });
+
+    return { couple: couple, kids: kids, step: step, far: farLinks };
+  }
+
+  /* ================= 渲染：卡片 ================= */
+  function subLabel(p) {
+    var bits = [sexLabel(p.sex)];
+    if (p.birth) bits.push(p.birth);
+    if (p.deceased) {
+      bits = [sexLabel(p.sex)];
+      var span = (p.birth || '?') + '–' + (p.death || '?');
+      bits.push(span);
+    }
+    return bits.join(' · ');
+  }
+
+  function cardSvg(n) {
+    var p = n.p;
+    var dead = p.deceased;
+    var color = p.sex === 'M' ? '#2f6fed' : '#e0558b';
+    var stroke = dead ? '#b9bfc7' : color;
+    var fill = dead ? '#f2f3f5' : '#ffffff';
+    var nameColor = dead ? '#6b7280' : '#1f2329';
+    var nm = p.name.length > 7 ? p.name.slice(0, 7) + '…' : p.name;
+    var title = p.name + ' · ' + sexLabel(p.sex)
+      + (p.birth ? ' · 生 ' + p.birth : '')
+      + (p.deceased ? ' · 已故' + (p.death ? ' ' + p.death : '') : '')
+      + (p.note ? ' · ' + p.note : '');
+    var cls = 'tnode' + (dead ? ' dead' : '');
+    return '<g class="' + cls + '" data-nodeid="' + p.id + '">'
+      + '<title>' + esc(title) + '</title>'
+      + '<rect class="box" x="' + n.x + '" y="' + n.y + '" rx="9" width="' + CARD_W + '" height="' + CARD_H + '"'
+      + ' fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.5"'
+      + (dead ? ' stroke-dasharray="4 3"' : '') + '></rect>'
+      + '<text x="' + (n.x + CARD_W / 2) + '" y="' + (n.y + 19) + '" text-anchor="middle" font-size="13.5" font-weight="600" fill="' + nameColor + '">'
+      + esc(nm) + (dead ? ' †' : '') + '</text>'
+      + '<text x="' + (n.x + CARD_W / 2) + '" y="' + (n.y + 34) + '" text-anchor="middle" font-size="10.5" fill="' + (dead ? '#9aa0a8' : '#8a9099') + '">'
+      + esc(subLabel(p)) + '</text>'
+      + '</g>';
+  }
+
+  var lastLayout = null;
+  var viewMode = 'tree';   // 'tree' | 'net'
+  var view = { k: 1, tx: 0, ty: 0 };
+  var netPos = {};         // id -> {x,y}  网图手动拖拽位置（覆盖力导向结果）
+  var treeOffset = {};     // id -> dx     树形同代内的水平偏移
+  var netLayoutCache = null; // 力导向布局缓存，避免拖拽时每帧重算导致抖动
+
+  // 手动布局持久化：网图拖拽位置 + 树形水平偏移分别存盘，刷新后保留
+  function loadManualLayout() {
+    try {
+      var n = JSON.parse(localStorage.getItem('jiashu_net_layout') || '{}');
+      if (n && typeof n === 'object') netPos = n;
+    } catch (e) { netPos = {}; }
+    try {
+      var t = JSON.parse(localStorage.getItem('jiashu_tree_offsets') || '{}');
+      if (t && typeof t === 'object') treeOffset = t;
+    } catch (e) { treeOffset = {}; }
+  }
+  function saveManualLayout() {
+    try { localStorage.setItem('jiashu_net_layout', JSON.stringify(netPos)); } catch (e) {}
+    try { localStorage.setItem('jiashu_tree_offsets', JSON.stringify(treeOffset)); } catch (e) {}
+  }
+
+  function renderTree() {
+    if (viewMode === 'net') { renderNetView(); return; }
+    var svg = document.getElementById('treeSvg');
+    var vp = document.getElementById('viewport');
+    var emptyTip = document.getElementById('emptyTip');
+    var stat = document.getElementById('treeStat');
+    vp.innerHTML = '';
+    hideMenu();
+
+    if (!persons.length) {
+      lastLayout = null;
+      emptyTip.classList.remove('hidden');
+      stat.textContent = '';
+      updateZoomLabel();
+      return;
+    }
+    emptyTip.classList.add('hidden');
+
+    var layout = computeLayout();
+    // 叠加树形「同代内水平调整」偏移（点击拖动节点产生）
+    layout.nodes.forEach(function (n) {
+      var dx = treeOffset[n.id];
+      if (dx) n.x += dx;
+    });
+    lastLayout = layout;
+    var conn = buildConnectors(layout);
+
+    // 世代背景带 + 左侧世代标签（仅在树形视图）
+    var genY = {};
+    layout.nodes.forEach(function (n) { genY[n.gen] = n.y; });
+    var gensSorted = Object.keys(genY).map(Number).sort(function (a, b) { return a - b; });
+    var bandsOut = [];
+    gensSorted.forEach(function (g) {
+      var top = genY[g] - 12;
+      bandsOut.push('<rect x="0" y="' + top + '" width="' + layout.w + '" height="' + (CARD_H + 24) + '" fill="'
+        + ((g % 2 === 0) ? 'rgba(47,111,237,0.045)' : 'rgba(224,85,139,0.045)') + '"></rect>');
+    });
+    var labelOut = [];
+    gensSorted.forEach(function (g) {
+      labelOut.push('<text x="6" y="' + (genY[g] + CARD_H / 2 + 4) + '" font-size="12" font-weight="700" fill="#9aa0a8">第' + (g + 1) + '代</text>');
+    });
+    var out = bandsOut.slice();
+
+    // 夫妻线：用弧线，跨距越大拱越高 —— 一夫多妻时多条线不会叠成一条
+    conn.couple.forEach(function (c) {
+      var left = c.a.x < c.b.x ? c.a : c.b;
+      var right = c.a.x < c.b.x ? c.b : c.a;
+      var y = c.a.y + CARD_H / 2;
+      var xa = left.x + CARD_W, xb = right.x;
+      if (xb < xa) { xa = left.x + CARD_W / 2; xb = right.x + CARD_W / 2; }
+      var span = xb - xa;
+      if (span <= 26) {
+        out.push('<line x1="' + xa + '" y1="' + y + '" x2="' + xb + '" y2="' + y
+          + '" stroke="#c1c7d0" stroke-width="2" stroke-linecap="round"></line>');
+      } else {
+        var h = Math.min(8 + span / 5, 38);
+        out.push('<path d="M' + xa + ' ' + y + ' Q' + ((xa + xb) / 2) + ' ' + (y - h) + ' ' + xb + ' ' + y
+          + '" fill="none" stroke="#c1c7d0" stroke-width="2" stroke-linecap="round"></path>');
+      }
+    });
+
+    // 亲子 T 线（按家庭配色，便于在重叠处区分不同父母的子女）
+    conn.kids.forEach(function (g) {
+      var col = g.color || '#b9c0c9';
+      out.push('<path d="M' + g.busX + ' ' + g.parentBottom + ' L' + g.busX + ' ' + g.busY
+        + ' M' + g.lineLeft + ' ' + g.busY + ' L' + g.lineRight + ' ' + g.busY
+        + '" fill="none" stroke="' + col + '" stroke-width="1.9" stroke-linecap="round"></path>');
+      g.kids.forEach(function (k) {
+        out.push('<path d="M' + k.cx + ' ' + g.busY + ' L' + k.cx + ' ' + k.y
+          + '" fill="none" stroke="' + col + '" stroke-width="1.9" stroke-linecap="round"></path>');
+      });
+    });
+
+    // 被配偶吸走的子女（如妻子跟着丈夫，跨集群）：家庭色虚线弧 + 两端圆点，连回其亲生父母总线
+    conn.far.forEach(function (f) {
+      var col = f.color || '#c9ced6';
+      var dy = Math.max(30, (f.toY - f.fromY) / 2);
+      out.push('<path d="M' + f.fromX + ' ' + f.fromY
+        + ' C' + f.fromX + ' ' + (f.fromY + dy) + ' ' + f.toX + ' ' + (f.toY - dy) + ' ' + f.toX + ' ' + f.toY
+        + '" fill="none" stroke="' + col + '" stroke-width="1.7" stroke-dasharray="6 4" stroke-linecap="round"></path>');
+      out.push('<circle cx="' + f.fromX + '" cy="' + f.fromY + '" r="2.8" fill="' + col + '"></circle>');
+      out.push('<circle cx="' + f.toX + '" cy="' + f.toY + '" r="2.8" fill="' + col + '"></circle>');
+    });
+
+    // 继亲虚线
+    conn.step.forEach(function (s) {
+      out.push('<path d="M' + s.x1 + ' ' + s.y1 + ' C' + s.x1 + ' ' + (s.y1 + 30) + ' '
+        + s.x2 + ' ' + (s.y2 - 30) + ' ' + s.x2 + ' ' + s.y2
+        + '" fill="none" stroke="#b0b6be" stroke-width="1.4" stroke-dasharray="5 4"></path>');
+    });
+
+    // 卡片
+    layout.nodes.forEach(function (n) { out.push(cardSvg(n)); });
+
+    // 世代标签置于最上层（左侧留白区，不与卡片重叠）
+    out = out.concat(labelOut);
+
+    vp.innerHTML = out.join('');
+
+    // 不设 viewBox：内容坐标即像素坐标，缩放/平移由 <g id="viewport"> 的 transform 完成。
+    // （若同时用 viewBox 固定内容尺寸，transform 放大后会超出 viewBox 被裁掉）
+    svg.removeAttribute('viewBox');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    stat.textContent = '共 ' + persons.length + ' 人 · ' + layout.rows + ' 代';
+
+    applyView();
+  }
+
+  /* ================= 网图布局（力导向） ================= */
+  function computeNetLayout() {
+    var n = persons.length;
+    var gen = computeGenerations();
+    var pos = {}, i;
+    persons.forEach(function (p, idx) {
+      var ang = (idx / Math.max(n, 1)) * Math.PI * 2;
+      var r = 90 + 30 * Math.sqrt(n);
+      pos[p.id] = { x: Math.cos(ang) * r, y: Math.sin(ang) * r };
+    });
+    var edges = [];
+    persons.forEach(function (p) {
+      allParentsOf(p).forEach(function (pid) { if (getPerson(pid)) edges.push({ a: p.id, b: pid, w: 1.0 }); });
+      (p.spouses || []).forEach(function (sid) { if (getPerson(sid)) edges.push({ a: p.id, b: sid, w: 0.7 }); });
+    });
+    var k = 96;
+    var temp = 1.0;
+    var iters = 280;
+    for (var it = 0; it < iters; it++) {
+      var disp = {};
+      persons.forEach(function (p) { disp[p.id] = { x: 0, y: 0 }; });
+      for (i = 0; i < n; i++) {
+        for (var j = i + 1; j < n; j++) {
+          var A = persons[i].id, B = persons[j].id;
+          var dx = pos[A].x - pos[B].x, dy = pos[A].y - pos[B].y;
+          var d2 = dx * dx + dy * dy;
+          if (d2 < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = dx * dx + dy * dy; }
+          var d = Math.sqrt(d2);
+          var rep = (k * k) / d;
+          disp[A].x += dx / d * rep; disp[A].y += dy / d * rep;
+          disp[B].x -= dx / d * rep; disp[B].y -= dy / d * rep;
+        }
+      }
+      edges.forEach(function (e) {
+        var A = pos[e.a], B = pos[e.b];
+        var dx = A.x - B.x, dy = A.y - B.y;
+        var d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        var attr = (d * d / k) * e.w;
+        disp[e.a].x -= dx / d * attr; disp[e.a].y -= dy / d * attr;
+        disp[e.b].x += dx / d * attr; disp[e.b].y += dy / d * attr;
+      });
+      persons.forEach(function (p) {
+        var c = pos[p.id];
+        disp[p.id].x += -c.x * 0.015; disp[p.id].y += -c.y * 0.015;
+      });
+      persons.forEach(function (p) {
+        var c = pos[p.id], dd = disp[p.id];
+        var dl = Math.sqrt(dd.x * dd.x + dd.y * dd.y) || 0.01;
+        var lim = Math.min(dl, temp * k);
+        c.x += dd.x / dl * lim; c.y += dd.y / dl * lim;
+      });
+      temp *= 0.985;
+    }
+    // 碰撞避让：保证任意两节点中心距不小于 minDist，避免卡片互相重叠（留出躲避空间）
+    var minDist = CARD_W + 30;
+    for (var ci = 0; ci < 140; ci++) {
+      for (i = 0; i < n; i++) {
+        for (var j = i + 1; j < n; j++) {
+          var A = persons[i].id, B = persons[j].id;
+          var dx = pos[A].x - pos[B].x, dy = pos[A].y - pos[B].y;
+          var d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          if (d < minDist) {
+            var push = (minDist - d) / 2 + 0.5;
+            var ux = dx / d, uy = dy / d;
+            pos[A].x += ux * push; pos[A].y += uy * push;
+            pos[B].x -= ux * push; pos[B].y -= uy * push;
+          }
+        }
+      }
+    }
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    persons.forEach(function (p) {
+      var c = pos[p.id];
+      if (c.x < minX) minX = c.x; if (c.x > maxX) maxX = c.x;
+      if (c.y < minY) minY = c.y; if (c.y > maxY) maxY = c.y;
+    });
+    var PAD = 60;
+    if (!isFinite(minX)) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
+    persons.forEach(function (p) {
+      pos[p.id].x += (-minX + PAD);
+      pos[p.id].y += (-minY + PAD);
+    });
+    var nodes = persons.map(function (p) {
+      return { id: p.id, p: p, x: pos[p.id].x, y: pos[p.id].y, gen: gen[p.id] };
+    });
+    return { nodes: nodes, gen: gen, w: (maxX - minX) + CARD_W + PAD * 2, h: (maxY - minY) + CARD_H + PAD * 2, rows: 1 };
+  }
+
+  function netEdge(a, b, color, w, dash) {
+    return '<line x1="' + (a.x + CARD_W / 2) + '" y1="' + (a.y + CARD_H / 2) + '" x2="' + (b.x + CARD_W / 2) + '" y2="' + (b.y + CARD_H / 2)
+      + '" stroke="' + color + '" stroke-width="' + w + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + ' stroke-linecap="round"></line>';
+  }
+
+  function getNetLayout() {
+    if (!netLayoutCache) netLayoutCache = computeNetLayout();
+    // 应用用户手动拖拽出的位置（覆盖力导向结果）
+    netLayoutCache.nodes.forEach(function (n) {
+      var o = netPos[n.id];
+      if (o && typeof o.x === 'number' && typeof o.y === 'number') { n.x = o.x; n.y = o.y; }
+    });
+    return netLayoutCache;
+  }
+
+  function renderNetView() {
+    var svg = document.getElementById('treeSvg');
+    var vp = document.getElementById('viewport');
+    var emptyTip = document.getElementById('emptyTip');
+    var stat = document.getElementById('treeStat');
+    vp.innerHTML = '';
+    hideMenu();
+    if (!persons.length) {
+      lastLayout = null; emptyTip.classList.remove('hidden'); stat.textContent = '';
+      updateZoomLabel(); return;
+    }
+    emptyTip.classList.add('hidden');
+    var layout = getNetLayout();
+    lastLayout = layout;
+    var byId = {};
+    layout.nodes.forEach(function (m) { byId[m.id] = m; });
+    var out = [];
+    // 继亲：虚线（最后画，置于底层）
+    persons.forEach(function (c) {
+      (c.stepParents || []).forEach(function (pid) {
+        var a = byId[pid], b = byId[c.id]; if (!a || !b) return;
+        out.push(netEdge(a, b, '#b0b6be', 1.4, '5 4'));
+      });
+    });
+    // 配偶：灰实线
+    var seen = {};
+    persons.forEach(function (p) {
+      (p.spouses || []).forEach(function (sid) {
+        var key = [p.id, sid].sort().join('|');
+        if (seen[key]) return; seen[key] = 1;
+        var a = byId[p.id], b = byId[sid]; if (!a || !b) return;
+        out.push(netEdge(a, b, '#c1c7d0', 1.8, null));
+      });
+    });
+    // 亲子：蓝实线（血缘主线，置于上层）
+    persons.forEach(function (c) {
+      var b = byId[c.id]; if (!b) return;
+      (c.parents || []).forEach(function (pid) {
+        var a = byId[pid]; if (!a) return;
+        out.push(netEdge(a, b, '#2f6fed', 1.6, null));
+      });
+    });
+    // 卡片
+    layout.nodes.forEach(function (m) { out.push(cardSvg(m)); });
+    vp.innerHTML = out.join('');
+    svg.removeAttribute('viewBox');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    stat.textContent = '共 ' + persons.length + ' 人 · 网图（可拖动节点 · 蓝=亲子 灰=配偶 虚线=继亲）';
+    applyView();
+  }
+
+  /* ================= 视图：缩放 / 拖拽 ================= */
+  function applyView() {
+    var vp = document.getElementById('viewport');
+    if (vp) vp.setAttribute('transform', 'translate(' + view.tx + ',' + view.ty + ') scale(' + view.k + ')');
+    updateZoomLabel();
+  }
+  function updateZoomLabel() {
+    var el = document.getElementById('zoomLabel');
+    if (el) el.textContent = Math.round(view.k * 100) + '%';
+  }
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+  function zoomAt(px, py, factor) {
+    var k2 = clamp(view.k * factor, 0.18, 3);
+    var r = k2 / view.k;
+    view.tx = px - (px - view.tx) * r;
+    view.ty = py - (py - view.ty) * r;
+    view.k = k2;
+    applyView();
+  }
+
+  // 拖动单个节点：网图自由(x,y)；树形仅水平(dx)，纵向锁定在当前世代
+  function moveNode(id, dxc, dyc) {
+    if (viewMode === 'net') {
+      var ly = getNetLayout();
+      var node = null;
+      ly.nodes.forEach(function (m) { if (m.id === id) node = m; });
+      if (!node) return;
+      if (!netPos[id]) netPos[id] = { x: node.x, y: node.y };
+      netPos[id].x += dxc;
+      netPos[id].y += dyc;
+      renderNetView();
+    } else {
+      treeOffset[id] = (treeOffset[id] || 0) + dxc;
+      renderTree();
+    }
+  }
+
+  function fitView() {
+    var wrap = document.getElementById('canvasWrap');
+    if (!lastLayout) {
+      wrap.style.height = '';
+      view = { k: 1, tx: 0, ty: 0 };
+      applyView();
+      return;
+    }
+    var cw = Math.max(lastLayout.w, 1), ch = Math.max(lastLayout.h, 1);
+    var w = Math.max(wrap.clientWidth, 200);
+
+    // 1) 先按宽度定缩放（族谱通常很「扁宽」）
+    var k = Math.min(w / cw, 1.25) * 0.97;
+
+    // 2) 画布高度贴合内容，避免扁长族谱下面留一大片空白
+    var maxH = Math.max(window.innerHeight * 0.74, 320);
+    var wantH = ch * k + 110;
+    var h = Math.min(Math.max(wantH, 340), maxH);
+    wrap.style.height = Math.round(h) + 'px';
+
+    // 3) 内容仍高于画布时再按高度缩
+    if (ch * k > h - 30) k = (h - 30) / ch;
+
+    view.k = clamp(k, 0.15, 2);
+    view.tx = (w - cw * view.k) / 2;
+    view.ty = (h - ch * view.k) / 2;
+    applyView();
+  }
+
+  function centerOnPerson(id) {
+    if (!lastLayout) return;
+    var n = null;
+    lastLayout.nodes.forEach(function (m) { if (m.id === id) n = m; });
+    if (!n) return;
+    var wrap = document.getElementById('canvasWrap');
+    var w = wrap.clientWidth, h = wrap.clientHeight;
+    view.tx = w / 2 - (n.x + CARD_W / 2) * view.k;
+    view.ty = h / 2 - (n.y + CARD_H / 2) * view.k;
+    applyView();
+  }
+
+  /* ================= 渲染：成员列表（按代折叠） ================= */
+  var openGens = {};
+
+  function renderMemberGroups() {
+    var box = document.getElementById('memberGroups');
+    var stat = document.getElementById('memberStat');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!persons.length) {
+      box.innerHTML = '<div class="hint" style="padding:8px 2px">还没有成员。</div>';
+      if (stat) stat.textContent = '';
+      return;
+    }
+
+    var gen = computeGenerations();
+    var q = (document.getElementById('memberSearch').value || '').trim();
+    var rows = {}, matched = 0;
+    persons.forEach(function (p) {
+      var ok = !q || p.name.indexOf(q) >= 0
+        || (p.note || '').indexOf(q) >= 0
+        || (p.birth || '').indexOf(q) >= 0;
+      if (!ok) return;
+      matched++;
+      var g = gen[p.id];
+      (rows[g] || (rows[g] = [])).push(p);
+    });
+
+    if (stat) stat.textContent = '共 ' + persons.length + ' 人' + (q ? ' · 匹配 ' + matched + ' 人' : '');
+
+    var gens = Object.keys(rows).map(Number).sort(function (a, b) { return a - b; });
+    if (!gens.length) {
+      box.innerHTML = '<div class="hint" style="padding:10px 2px">没有匹配的成员。</div>';
+      return;
+    }
+
+    gens.forEach(function (g) {
+      var list = rows[g].slice().sort(function (a, b) { return idxOf(a.id) - idxOf(b.id); });
+      var opened = q ? true : !!openGens[g];
+      var wrap = document.createElement('div');
+      wrap.className = 'gen-group' + (opened ? ' open' : '');
+      wrap.setAttribute('data-gen', g);
+
+      var head = document.createElement('button');
+      head.className = 'gen-head';
+      head.type = 'button';
+      head.innerHTML = '<span class="gl"><span class="chev">▶</span><span class="gname">第 ' + (g + 1) + ' 代</span>'
+        + '<span class="gcnt">' + list.length + ' 人' + (g === 0 ? ' · 最上' : '') + '</span></span>';
+      wrap.appendChild(head);
+
+      var body = document.createElement('div');
+      body.className = 'gen-body';
+      var tb = document.createElement('table');
+      tb.innerHTML = '<thead><tr><th style="width:150px">姓名</th><th style="width:60px">性别</th>'
+        + '<th>父母</th><th>配偶</th><th style="width:110px">操作</th></tr></thead>';
+      var tbody = document.createElement('tbody');
+
+      list.forEach(function (p) {
+        var tr = document.createElement('tr');
+        var parents = p.parents.map(function (id) { var x = getPerson(id); return x ? x.name : '?'; }).join('、') || '—';
+        var parentsHtml = esc(parents);
+        var steps = (p.stepParents || []).map(function (id) { var x = getPerson(id); return x ? x.name : '?'; });
+        if (steps.length) parentsHtml += ' <span class="pill">继 ' + esc(steps.join('、')) + '</span>';
+        var spouses = p.spouses.map(function (id) { var x = getPerson(id); return x ? x.name : '?'; }).join('、') || '—';
+        var sexCls = p.sex === 'M' ? 'm' : 'f';
+        tr.innerHTML =
+          '<td><span class="nm" data-focus="' + p.id + '" title="在树中定位">' + esc(p.name) + '</span>'
+          + (p.deceased ? '<span class="dy">†' + (p.death ? ' ' + esc(p.death) : '') + '</span>' : '') + '</td>'
+          + '<td><span class="pill ' + sexCls + '">' + sexLabel(p.sex) + '</span></td>'
+          + '<td>' + parentsHtml + '</td>'
+          + '<td>' + esc(spouses) + '</td>'
+          + '<td><button class="ghost mini" data-edit="' + p.id + '">编辑</button>'
+          + '<button class="ghost mini" data-del="' + p.id + '">删除</button></td>';
+        tbody.appendChild(tr);
+      });
+      tb.appendChild(tbody);
+      body.appendChild(tb);
+      wrap.appendChild(body);
+
+      head.addEventListener('click', function () {
+        openGens[g] = !wrap.classList.contains('open');
+        wrap.classList.toggle('open');
+      });
+
+      box.appendChild(wrap);
+    });
+  }
+
+  /* ================= 称谓 ================= */
+  function neighbors(id, allowStep) {
+    var p = getPerson(id), n = [];
+    if (!p) return n;
+    p.parents.forEach(function (pid) { if (getPerson(pid)) n.push([pid, 'up']); });
+    if (allowStep) (p.stepParents || []).forEach(function (pid) { if (getPerson(pid)) n.push([pid, 'stepup']); });
+    childrenOf(id).forEach(function (cid) { n.push([cid, 'down']); });
+    p.spouses.forEach(function (sid) { if (getPerson(sid)) n.push([sid, 'spouse']); });
+    // 同父母/同继父母的兄弟姐妹
+    var sibs = {};
+    allParentsOf(p).forEach(function (pid) {
+      persons.forEach(function (q) {
+        if (q.id === p.id) return;
+        if (allParentsOf(q).indexOf(pid) >= 0) sibs[q.id] = 1;
+      });
+    });
+    Object.keys(sibs).forEach(function (sid) { n.push([sid, 'sib']); });
+    return n;
+  }
+
+  function relWord(from, to, kind) {
+    var t = getPerson(to);
+    if (!t) return '';
+    if (kind === 'up') return t.sex === 'M' ? '爸爸' : '妈妈';
+    if (kind === 'stepup') return t.sex === 'M' ? '继父' : '继母';
+    if (kind === 'down') return t.sex === 'M' ? '儿子' : '女儿';
+    if (kind === 'spouse') return t.sex === 'M' ? '丈夫' : '妻子';
+    if (kind === 'sib') return t.sex === 'M' ? '兄弟' : '姐妹';
+    return '';
+  }
+
+  function chainAB(A, B, allowStep) {
+    if (A === B) return '';
+    var q = [[A, []]], seen = {};
+    seen[A] = true;
+    while (q.length) {
+      var cur = q.shift(), path = cur[1];
+      var nbs = neighbors(cur[0], allowStep);
+      for (var i = 0; i < nbs.length; i++) {
+        var nb = nbs[i][0], kind = nbs[i][1];
+        if (seen[nb]) continue;
+        var w = relWord(cur[0], nb, kind);
+        if (!w) continue;
+        var np = path.concat([w]);
+        if (nb === B) return np;
+        seen[nb] = true;
+        if (np.length < 12) q.push([nb, np]);
+      }
+    }
+    return null;
+  }
+
+  function termAB(A, B) {
+    if (A === B) return { term: '自己', chain: '本人' };
+    var pa = getPerson(A), pb = getPerson(B);
+    if (!pa || !pb) return null;
+
+    // 直系继亲优先判定：B 是 A 的继父/继母，或 A 是 B 的继子女
+    if ((pa.stepParents || []).indexOf(B) >= 0) {
+      var t1 = pb.sex === 'M' ? '继父' : '继母';
+      return { term: t1, chain: t1, step: true };
+    }
+    if ((pb.stepParents || []).indexOf(A) >= 0) {
+      // A 是 B 的继父母 → 反过来说 B 是 A 的继子女，性别取 B 的
+      var t2 = pb.sex === 'M' ? '继子' : '继女';
+      return { term: t2, chain: t2, step: true };
+    }
+
+    var pure = chainAB(A, B, false);
+    if (pure) {
+      var sex = pa.sex === 'M' ? 1 : 0;
+      try {
+        var r = relationship({ text: pure.join('的'), sex: sex });
+        if (Array.isArray(r) && r.length) return { term: r.join(' / '), chain: pure.join('→') };
+      } catch (e) {}
+      return { term: null, chain: pure.join('→') };
+    }
+    var mixed = chainAB(A, B, true);
+    if (!mixed) return null;
+    if (mixed.length === 1) return { term: mixed[0], chain: mixed[0], step: true };
+    var hasStep = mixed.some(function (w) { return w === '继父' || w === '继母'; });
+    if (!hasStep) {
+      var sex2 = pa.sex === 'M' ? 1 : 0;
+      try {
+        var r2 = relationship({ text: mixed.join('的'), sex: sex2 });
+        if (Array.isArray(r2) && r2.length) return { term: r2.join(' / '), chain: mixed.join('→') };
+      } catch (e) {}
+      return { term: null, chain: mixed.join('→') };
+    }
+    var text = mixed.join('的').replace(/继父/g, '爸爸').replace(/继母/g, '妈妈');
+    var sex3 = pa.sex === 'M' ? 1 : 0;
+    try {
+      var r3 = relationship({ text: text, sex: sex3 });
+      if (Array.isArray(r3) && r3.length) {
+        return { term: r3.join(' / ') + '（继亲）', chain: mixed.join('→'), step: true };
+      }
+    } catch (e) {}
+    return { term: null, chain: mixed.join('→'), step: true };
+  }
+
+  function doRelation() {
+    var a = pickerRelA ? pickerRelA.getSelected()[0] : null;
+    var b = pickerRelB ? pickerRelB.getSelected()[0] : null;
+    var box = document.getElementById('relResult');
+    if (!a || !b) { box.innerHTML = '<div class="hint">请先选两个人。</div>'; return; }
+    var pa = getPerson(a), pb = getPerson(b);
+    if (!pa || !pb) { box.innerHTML = '<div class="hint">成员不存在。</div>'; return; }
+    var ab = termAB(a, b), ba = termAB(b, a);
+    var html = '<div class="rel-line">' + esc(pa.name) + ' 称 ' + esc(pb.name) + '：';
+    if (ab && ab.term) html += '<span class="rel-term">' + esc(ab.term) + '</span>';
+    else if (ab) html += '<span class="hint">（无法确定称谓，关系链：' + esc(ab.chain) + '）</span>';
+    else html += '<span class="hint">（家族树里没有连通，无法推算）</span>';
+    html += '</div>';
+    html += '<div class="rel-line">' + esc(pb.name) + ' 称 ' + esc(pa.name) + '：';
+    if (ba && ba.term) html += '<span class="rel-term">' + esc(ba.term) + '</span>';
+    else if (ba) html += '<span class="hint">（无法确定称谓，关系链：' + esc(ba.chain) + '）</span>';
+    else html += '<span class="hint">（家族树里没有连通，无法推算）</span>';
+    html += '</div>';
+    if (ab && ab.chain) html += '<div class="rel-chain">' + esc(pa.name) + ' 的关系链：' + esc(ab.chain) + '</div>';
+    box.innerHTML = html;
+  }
+
+  function setRelOptions() {
+    if (!pickerRelA) return;
+    var gen = computeGenerations();
+    function toOpt(p) {
+      return { id: p.id, name: p.name, sex: p.sex, deceased: p.deceased, sub: '第' + ((gen[p.id] || 0) + 1) + '代' };
+    }
+    var list = persons.slice().sort(function (a, b) { return idxOf(a.id) - idxOf(b.id); }).map(toOpt);
+    pickerRelA.setOptions(list);
+    pickerRelB.setOptions(list);
+  }
+
+  /* ================= 弹窗表单 ================= */
+  var modalMode = 'add';      // add | edit | addChild | addSpouse | addParent | addStepParent
+  var modalTarget = null;
+  var modalRole = 'M';
+  var editingId = null;
+  var formSpouseOverride = null;
+  var formStepOverride = null;
+  var pickerSF = null, pickerSM = null, pickerSP = null;
+  var pickerRelA = null, pickerRelB = null;
+  function initPickers() {
+    if (pickerSF) return;
+    pickerSF = makePicker(document.getElementById('f-stepfather'), { multi: true, placeholder: '搜索男性…' });
+    pickerSM = makePicker(document.getElementById('f-stepmother'), { multi: true, placeholder: '搜索女性…' });
+    pickerSP = makePicker(document.getElementById('f-spouses'), { multi: true, placeholder: '搜索成员（可多选）…' });
+    pickerRelA = makePicker(document.getElementById('relA'), { multi: false, placeholder: '搜索人物 A…' });
+    pickerRelB = makePicker(document.getElementById('relB'), { multi: false, placeholder: '搜索人物 B…' });
+  }
+
+  function resetFormFields() {
+    document.getElementById('f-name').value = '';
+    document.querySelector('input[name="f-sex"][value="M"]').checked = true;
+    document.getElementById('f-birth').value = '';
+    document.getElementById('f-death').value = '';
+    document.getElementById('f-deceased').checked = false;
+    document.getElementById('f-death-wrap').classList.add('hidden');
+    document.getElementById('f-note').value = '';
+    formSpouseOverride = null;
+    formStepOverride = null;
+    if (pickerSF) { pickerSF.clear(); pickerSM.clear(); pickerSP.clear(); }
+  }
+
+  function candidates(excludeIds, sex) {
+    return persons.filter(function (p) {
+      if (excludeIds.indexOf(p.id) >= 0) return false;
+      if (sex && p.sex !== sex) return false;
+      return true;
+    });
+  }
+
+  function buildSelect(sel, list, placeholder, selected) {
+    sel.innerHTML = '';
+    var o0 = document.createElement('option');
+    o0.value = '';
+    o0.textContent = placeholder;
+    sel.appendChild(o0);
+    list.forEach(function (p) {
+      var o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name + (p.deceased ? ' †' : '') + '（' + sexLabel(p.sex) + '）';
+      sel.appendChild(o);
+    });
+    sel.value = selected && getPerson(selected) ? selected : '';
+  }
+
+  /* ================= 可搜索多选选择器 ================= */
+  function makePicker(container, opts) {
+    container.innerHTML = '';
+    container.className = (container.className || '').replace(/\bpick-box\b/, '').trim() + ' picker-host';
+    var wrap = document.createElement('div'); wrap.className = 'picker';
+    var chips = document.createElement('div'); chips.className = 'picker-chips';
+    var input = document.createElement('input'); input.type = 'text'; input.className = 'picker-input';
+    input.placeholder = opts.placeholder || '搜索…';
+    var drop = document.createElement('div'); drop.className = 'picker-drop hidden';
+    wrap.appendChild(chips); wrap.appendChild(input); wrap.appendChild(drop);
+    container.appendChild(wrap);
+
+    var selected = [];
+    var options = [];
+
+    function renderChips() {
+      chips.innerHTML = '';
+      selected.forEach(function (id) {
+        var p = getPerson(id); if (!p) return;
+        var chip = document.createElement('span');
+        chip.className = 'picker-chip ' + (p.sex === 'M' ? 'm' : 'f');
+        chip.appendChild(document.createTextNode(p.name + (p.deceased ? ' †' : '')));
+        var x = document.createElement('span'); x.className = 'picker-x'; x.textContent = '✕';
+        x.setAttribute('data-id', id);
+        chip.appendChild(x);
+        chips.appendChild(chip);
+      });
+    }
+    function renderDrop() {
+      drop.innerHTML = '';
+      var q = input.value.trim().toLowerCase();
+      var list = options.filter(function (o) {
+        if (selected.indexOf(o.id) >= 0) return false;
+        if (!q) return true;
+        return (o.name || '').toLowerCase().indexOf(q) >= 0 || (o.sub || '').toLowerCase().indexOf(q) >= 0;
+      });
+      if (!list.length) { drop.innerHTML = '<div class="picker-empty">无匹配</div>'; drop.classList.remove('hidden'); return; }
+      list.slice(0, 40).forEach(function (o) {
+        var it = document.createElement('div'); it.className = 'picker-opt'; it.setAttribute('data-id', o.id);
+        var nm = document.createElement('span'); nm.className = 'picker-opt-name';
+        nm.textContent = o.name + (o.deceased ? ' †' : '');
+        var sb = document.createElement('span'); sb.className = 'picker-opt-sub';
+        sb.textContent = (o.sex === 'M' ? '男' : '女') + (o.sub ? ' · ' + o.sub : '');
+        it.appendChild(nm); it.appendChild(sb);
+        drop.appendChild(it);
+      });
+      drop.classList.remove('hidden');
+    }
+    input.addEventListener('focus', renderDrop);
+    input.addEventListener('input', renderDrop);
+    input.addEventListener('blur', function () { setTimeout(function () { drop.classList.add('hidden'); }, 150); });
+    drop.addEventListener('mousedown', function (e) {
+      var opt = e.target.closest ? e.target.closest('.picker-opt') : null;
+      if (!opt) return;
+      var id = opt.getAttribute('data-id');
+      if (opts.multi) { if (selected.indexOf(id) < 0) selected.push(id); }
+      else { selected = [id]; }
+      input.value = ''; renderChips(); renderDrop(); input.focus();
+    });
+    chips.addEventListener('click', function (e) {
+      if (e.target.classList && e.target.classList.contains('picker-x')) {
+        var id = e.target.getAttribute('data-id');
+        selected = selected.filter(function (x) { return x !== id; });
+        renderChips(); renderDrop();
+      }
+    });
+
+    return {
+      setOptions: function (list) {
+        options = (list || []).slice();
+        selected = selected.filter(function (id) { return options.some(function (o) { return o.id === id; }); });
+        renderChips();
+      },
+      getSelected: function () { return selected.slice(); },
+      setSelected: function (ids) { selected = (ids || []).slice(); renderChips(); },
+      clear: function () { selected = []; renderChips(); }
+    };
+  }
+
+  function refreshFormOptions() {
+    var selfId = editingId || '';
+    var exclude = selfId ? [selfId] : [];
+    // 编辑时排除自己的后代（防环）
+    if (selfId) {
+      persons.forEach(function (p) {
+        if (isDescendantOf(p.id, selfId)) exclude.push(p.id);
+      });
+    }
+    var curFather = document.getElementById('f-father').value;
+    var curMother = document.getElementById('f-mother').value;
+
+    buildSelect(document.getElementById('f-father'), candidates(exclude, 'M'), '（无 / 未知）', curFather);
+    buildSelect(document.getElementById('f-mother'), candidates(exclude, 'F'), '（无 / 未知）', curMother);
+
+    var fatherId = document.getElementById('f-father').value;
+    var motherId = document.getElementById('f-mother').value;
+    var exStep = exclude.concat([fatherId, motherId]).filter(Boolean);
+    var gmap = computeGenerations();
+    function toOpt(p) {
+      return { id: p.id, name: p.name, sex: p.sex, deceased: p.deceased, sub: '第' + ((gmap[p.id] || 0) + 1) + '代' };
+    }
+    pickerSF.setOptions(candidates(exStep, 'M').map(toOpt));
+    pickerSM.setOptions(candidates(exStep, 'F').map(toOpt));
+    pickerSP.setOptions(candidates(exclude, null).map(toOpt));
+
+    if (formSpouseOverride) { pickerSP.setSelected(formSpouseOverride); formSpouseOverride = null; }
+  }
+
+  function openModal() {
+    document.getElementById('modal').style.display = 'block';
+  }
+  function closeModal() {
+    document.getElementById('modal').style.display = 'none';
+  }
+
+  function showAddRoot() {
+    modalMode = 'add'; modalTarget = null; modalRole = 'M'; editingId = null;
+    resetFormFields();
+    document.getElementById('f-parents-row').classList.remove('hidden');
+    document.getElementById('parent-note').classList.add('hidden');
+    document.getElementById('modal-title').textContent = '添加成员';
+    document.getElementById('btn-save').textContent = '添加';
+    refreshFormOptions();
+    openModal();
+    document.getElementById('f-name').focus();
+  }
+
+  function showAddChild(id) {
+    var t = getPerson(id); if (!t) return;
+    modalMode = 'addChild'; modalTarget = id; modalRole = 'M'; editingId = null;
+    resetFormFields();
+    document.getElementById('f-parents-row').classList.remove('hidden');
+    document.getElementById('parent-note').classList.add('hidden');
+    document.getElementById('modal-title').textContent = '为「' + t.name + '」添加子女';
+    document.getElementById('btn-save').textContent = '添加';
+    refreshFormOptions();
+    // 选项就绪后再预填
+    if (t.sex === 'M') document.getElementById('f-father').value = id;
+    else document.getElementById('f-mother').value = id;
+    var co = t.spouses.filter(function (s) { return getPerson(s); })[0];
+    if (co) {
+      var q = getPerson(co);
+      if (t.sex === 'M' && q.sex === 'F') document.getElementById('f-mother').value = co;
+      else if (t.sex === 'F' && q.sex === 'M') document.getElementById('f-father').value = co;
+    }
+    document.querySelector('input[name="f-sex"][value="M"]').checked = true;
+    openModal();
+    document.getElementById('f-name').focus();
+  }
+
+  function showAddSpouse(id) {
+    var t = getPerson(id); if (!t) return;
+    modalMode = 'addSpouse'; modalTarget = id; editingId = null;
+    modalRole = t.sex === 'M' ? 'F' : 'M';
+    resetFormFields();
+    document.getElementById('f-parents-row').classList.remove('hidden');
+    document.getElementById('parent-note').classList.add('hidden');
+    document.getElementById('modal-title').textContent = '为「' + t.name + '」添加配偶';
+    document.getElementById('btn-save').textContent = '添加';
+    formSpouseOverride = [id];
+    refreshFormOptions();
+    formSpouseOverride = null;
+    document.querySelector('input[name="f-sex"][value="' + modalRole + '"]').checked = true;
+    openModal();
+    document.getElementById('f-name').focus();
+  }
+
+  function showAddParent(id, role) {
+    var t = getPerson(id); if (!t) return;
+    modalMode = 'addParent'; modalTarget = id; modalRole = role; editingId = null;
+    resetFormFields();
+    document.getElementById('f-parents-row').classList.add('hidden');
+    var note = document.getElementById('parent-note');
+    note.classList.remove('hidden');
+    note.textContent = '新成员将作为「' + t.name + '」的' + (role === 'M' ? '父亲' : '母亲') + '。'
+      + '若在「配偶」里勾选其伴侣，伴侣会一并作为另一位家长。';
+    document.getElementById('modal-title').textContent = '为「' + t.name + '」添加' + (role === 'M' ? '父亲' : '母亲');
+    document.getElementById('btn-save').textContent = '添加';
+    refreshFormOptions();
+    document.querySelector('input[name="f-sex"][value="' + role + '"]').checked = true;
+    openModal();
+    document.getElementById('f-name').focus();
+  }
+
+  function showAddStepParent(id, role) {
+    var t = getPerson(id); if (!t) return;
+    modalMode = 'addStepParent'; modalTarget = id; modalRole = role; editingId = null;
+    resetFormFields();
+    document.getElementById('f-parents-row').classList.add('hidden');
+    var note = document.getElementById('parent-note');
+    note.classList.remove('hidden');
+    note.textContent = '新成员将作为「' + t.name + '」的' + (role === 'M' ? '继父' : '继母')
+      + '（无血缘关系，树上用虚线连接）。若其与「' + t.name + '」的亲生'
+      + (role === 'M' ? '母亲' : '父亲') + '是夫妻，可在「配偶」里一并勾选。';
+    document.getElementById('modal-title').textContent = '为「' + t.name + '」添加' + (role === 'M' ? '继父' : '继母');
+    document.getElementById('btn-save').textContent = '添加';
+    refreshFormOptions();
+    document.querySelector('input[name="f-sex"][value="' + role + '"]').checked = true;
+    openModal();
+    document.getElementById('f-name').focus();
+  }
+
+  function showEdit(id) {
+    var p = getPerson(id); if (!p) return;
+    modalMode = 'edit'; modalTarget = id; editingId = id;
+    resetFormFields();
+    document.getElementById('f-name').value = p.name;
+    document.querySelector('input[name="f-sex"][value="' + p.sex + '"]').checked = true;
+    document.getElementById('f-birth').value = p.birth || '';
+    document.getElementById('f-deceased').checked = !!p.deceased;
+    document.getElementById('f-death').value = p.death || '';
+    document.getElementById('f-death-wrap').classList.toggle('hidden', !p.deceased);
+    document.getElementById('f-note').value = p.note || '';
+    document.getElementById('f-parents-row').classList.remove('hidden');
+    document.getElementById('parent-note').classList.add('hidden');
+    document.getElementById('modal-title').textContent = '编辑「' + p.name + '」';
+    document.getElementById('btn-save').textContent = '保存修改';
+
+    formSpouseOverride = p.spouses.slice();
+    refreshFormOptions();
+    // 回填亲生父母
+    var dad = p.parents.filter(function (pid) { var x = getPerson(pid); return x && x.sex === 'M'; })[0] || '';
+    var mom = p.parents.filter(function (pid) { var x = getPerson(pid); return x && x.sex === 'F'; })[0] || '';
+    document.getElementById('f-father').value = dad;
+    document.getElementById('f-mother').value = mom;
+    formSpouseOverride = null;
+    // 继父母 + 配偶 回填（搜索选择器）
+    pickerSF.setSelected((p.stepParents || []).filter(function (id) { var x = getPerson(id); return x && x.sex === 'M'; }));
+    pickerSM.setSelected((p.stepParents || []).filter(function (id) { var x = getPerson(id); return x && x.sex === 'F'; }));
+    pickerSP.setSelected(p.spouses.slice());
+
+    openModal();
+  }
+
+  function collectForm() {
+    var name = document.getElementById('f-name').value.trim();
+    if (!name) { alert('请填写姓名'); return null; }
+    var sex = document.querySelector('input[name="f-sex"]:checked').value;
+    var parents = [];
+    var f = document.getElementById('f-father').value;
+    var m = document.getElementById('f-mother').value;
+    if (f) parents.push(f);
+    if (m) parents.push(m);
+    var steps = pickerSF.getSelected().concat(pickerSM.getSelected())
+      .filter(function (id) { return parents.indexOf(id) < 0; });
+    var spouses = pickerSP.getSelected();
+    return {
+      name: name, sex: sex, parents: parents, stepParents: steps, spouses: spouses,
+      birth: document.getElementById('f-birth').value.trim(),
+      death: document.getElementById('f-death').value.trim(),
+      deceased: document.getElementById('f-deceased').checked,
+      note: document.getElementById('f-note').value.trim()
+    };
+  }
+
+  function validate(form, selfId) {
+    var selfGen = selfId ? true : false;
+    var cands = form.parents.concat(form.stepParents);
+    for (var i = 0; i < cands.length; i++) {
+      if (selfId && cands[i] === selfId) { alert('不能把自己设为父母'); return false; }
+    }
+    if (form.parents.length === 2) {
+      var a = getPerson(form.parents[0]), b = getPerson(form.parents[1]);
+      if (a && b && a.sex === b.sex) { alert('父亲和母亲不能是同一性别，请把其中一位改为继亲'); return false; }
+    }
+    if (selfId) {
+      for (var k = 0; k < cands.length; k++) {
+        if (isDescendantOf(cands[k], selfId)) {
+          alert('不能把本人的后代设为父母或继父母（会形成环）');
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function saveMember() {
+    var form = collectForm();
+    if (!form) return;
+
+    if (modalMode === 'edit') {
+      if (!validate(form, editingId)) return;
+      var p = getPerson(editingId);
+      if (!p) return;
+      p.name = form.name; p.sex = form.sex;
+      p.parents = form.parents; p.stepParents = form.stepParents;
+      p.birth = form.birth; p.death = form.death;
+      p.deceased = form.deceased || !!form.death;
+      p.note = form.note;
+      // 配偶双向同步
+      var old = p.spouses.slice();
+      old.forEach(function (sid) {
+        var q = getPerson(sid);
+        if (q && form.spouses.indexOf(sid) < 0) q.spouses = q.spouses.filter(function (x) { return x !== p.id; });
+      });
+      form.spouses.forEach(function (sid) {
+        var q = getPerson(sid);
+        if (q && q.spouses.indexOf(p.id) < 0) q.spouses.push(p.id);
+      });
+      p.spouses = form.spouses.slice();
+      closeModal();
+      afterChange('已保存修改');
+      return;
+    }
+
+    // 新增
+    if (!validate(form, null)) return;
+    var np = {
+      id: newId(), name: form.name, sex: form.sex,
+      parents: form.parents, stepParents: form.stepParents, spouses: form.spouses,
+      birth: form.birth, death: form.death,
+      deceased: form.deceased || !!form.death, note: form.note
+    };
+    persons.push(np);
+
+    // 场景补充关系
+    if (modalMode === 'addChild' && modalTarget) {
+      var t = getPerson(modalTarget);
+      if (t && np.parents.indexOf(t.id) < 0) np.parents.push(t.id);
+    }
+    if (modalMode === 'addParent' && modalTarget) {
+      var c1 = getPerson(modalTarget);
+      if (c1 && c1.parents.indexOf(np.id) < 0) c1.parents.push(np.id);
+    }
+    if (modalMode === 'addStepParent' && modalTarget) {
+      var c2 = getPerson(modalTarget);
+      if (c2) {
+        if (c2.stepParents.indexOf(np.id) < 0) c2.stepParents.push(np.id);
+        // 若生父/生母在，且继父母为异性且未配偶，自动结为配偶（常见情形）
+        var bio = c2.parents.map(function (pid) { return getPerson(pid); })
+          .filter(function (x) { return x && x.sex !== np.sex; })[0];
+        if (bio && bio.spouses.indexOf(np.id) < 0 && !bio.deceased) {
+          bio.spouses.push(np.id);
+          if (np.spouses.indexOf(bio.id) < 0) np.spouses.push(bio.id);
+        }
+      }
+    }
+    // 配偶双向
+    np.spouses.forEach(function (sid) {
+      var q = getPerson(sid);
+      if (q && q.spouses.indexOf(np.id) < 0) q.spouses.push(np.id);
+    });
+
+    closeModal();
+    afterChange('已添加「' + np.name + '」');
+    // 自动定位到新人
+    setTimeout(function () { centerOnPerson(np.id); }, 60);
+  }
+
+  function deleteMember(id) {
+    var p = getPerson(id);
+    if (!p) return;
+    if (!confirm('确定删除「' + p.name + '」？其关系也会一并解除。')) return;
+    persons = persons.filter(function (x) { return x.id !== id; });
+    persons.forEach(function (x) {
+      x.parents = x.parents.filter(function (i) { return i !== id; });
+      x.stepParents = (x.stepParents || []).filter(function (i) { return i !== id; });
+      x.spouses = x.spouses.filter(function (i) { return i !== id; });
+    });
+    afterChange('已删除');
+  }
+
+  function afterChange(msg) {
+    normalizeAll();
+    save();
+    netLayoutCache = null;   // 数据变化，网图缓存作废
+    renderAll();
+    if (msg) toast(msg);
+  }
+
+  /* ================= 导出图片（PNG / SVG） ================= */
+  function dateStamp() {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  // 克隆当前 SVG（含背景带/连线/卡片/世代标签），复位变换以导出完整树
+  function snapshotSVG() {
+    var svg = document.getElementById('treeSvg');
+    var w = lastLayout ? lastLayout.w : 800, h = lastLayout ? lastLayout.h : 600;
+    var clone = svg.cloneNode(true);
+    clone.setAttribute('width', w);
+    clone.setAttribute('height', h);
+    clone.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    clone.setAttribute('font-family', '-apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif');
+    clone.removeAttribute('style');
+    var vp = clone.querySelector('#viewport');
+    if (vp) vp.removeAttribute('transform');
+    var bg = '<rect x="0" y="0" width="' + w + '" height="' + h + '" fill="#ffffff"></rect>';
+    clone.insertAdjacentHTML('afterbegin', bg);
+    return { svg: clone, w: w, h: h };
+  }
+  function exportSVG() {
+    if (!lastLayout) { toast('没有可导出的内容'); return; }
+    var snap = snapshotSVG();
+    var xml = new XMLSerializer().serializeToString(snap.svg);
+    var blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'family-tree-' + dateStamp() + '.svg';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    toast('已导出 SVG');
+  }
+  function exportPNG() {
+    if (!lastLayout) { toast('没有可导出的内容'); return; }
+    var snap = snapshotSVG();
+    var xml = new XMLSerializer().serializeToString(snap.svg);
+    var url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+    var img = new Image();
+    img.onload = function () {
+      var scale = 2;
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(snap.w * scale);
+      canvas.height = Math.round(snap.h * scale);
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(function (blob) {
+        if (!blob) { alert('导出 PNG 失败'); return; }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'family-tree-' + dateStamp() + '.png';
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+        toast('已导出 PNG');
+      });
+    };
+    img.onerror = function () { alert('导出失败：SVG 无法渲染（可能是浏览器限制）'); };
+    img.src = url;
+  }
+
+  function renderAll(opts) {
+    renderTree();
+    renderMemberGroups();
+    setRelOptions();
+    if (opts && opts.fit) setTimeout(fitView, 30);
+  }
+
+  /* ================= 节点菜单 ================= */
+  function hideMenu() {
+    var m = document.getElementById('nodeMenu');
+    if (m) m.style.display = 'none';
+  }
+
+  function showNodeMenu(id, cx, cy) {
+    var p = getPerson(id);
+    if (!p) return;
+    var menu = document.getElementById('nodeMenu');
+    var items = [
+      ['child', '＋ 添加子女（下一辈）'],
+      ['spouse', '＋ 添加配偶'],
+      ['sep'],
+      ['father', '＋ 添加父亲（上一辈）'],
+      ['mother', '＋ 添加母亲（上一辈）'],
+      ['stepfather', '＋ 添加继父'],
+      ['stepmother', '＋ 添加继母'],
+      ['sep'],
+      ['center', '◎ 移到画面中央'],
+      ['edit', '✎ 编辑资料'],
+      ['del', '✕ 删除成员']
+    ];
+    var html = '<div class="nm-title">' + esc(p.name) + '（' + sexLabel(p.sex) + (p.deceased ? ' · 已故' : '') + '）</div>';
+    items.forEach(function (it) {
+      if (it[0] === 'sep') { html += '<div class="sep"></div>'; return; }
+      var danger = it[0] === 'del' ? ' class="danger"' : '';
+      html += '<button data-act="' + it[0] + '" data-id="' + id + '"' + danger + '>' + it[1] + '</button>';
+    });
+    menu.innerHTML = html;
+    menu.style.display = 'block';
+    menu.style.left = '0px'; menu.style.top = '0px';
+    var r = menu.getBoundingClientRect();
+    var left = Math.min(cx + 6, window.innerWidth - r.width - 8);
+    var top = Math.min(cy + 6, window.innerHeight - r.height - 8);
+    menu.style.left = Math.max(6, left) + 'px';
+    menu.style.top = Math.max(6, top) + 'px';
+  }
+
+  /* ================= 示例 ================= */
+  function loadSample() {
+    if (persons.length && !confirm('已有数据，载入示例会覆盖当前数据。继续？')) return;
+    persons = [
+      { id: 'gf', name: '爷爷', sex: 'M', parents: [], spouses: ['gm'], birth: '1932', death: '2008', deceased: true, note: '' },
+      { id: 'gm', name: '奶奶', sex: 'F', parents: [], spouses: ['gf'], birth: '1936', death: '2015', deceased: true, note: '' },
+      { id: 'f', name: '爸爸', sex: 'M', parents: ['gf', 'gm'], spouses: ['m', 'sm'], birth: '1960', note: '' },
+      { id: 'm', name: '妈妈', sex: 'F', parents: [], spouses: ['f'], birth: '1963', note: '' },
+      { id: 'sm', name: '继母', sex: 'F', parents: [], spouses: ['f'], birth: '1972', note: '爸爸的第二任妻子（示例）' },
+      { id: 'wf', name: '岳父', sex: 'M', parents: [], spouses: ['wm'], birth: '1938', note: '' },
+      { id: 'wm', name: '岳母', sex: 'F', parents: [], spouses: ['wf'], birth: '1941', note: '' },
+      { id: 'un', name: '叔叔', sex: 'M', parents: ['gf', 'gm'], spouses: ['au'], birth: '1965', note: '' },
+      { id: 'au', name: '婶婶', sex: 'F', parents: [], spouses: ['un'], birth: '1967', note: '' },
+      { id: 'me', name: '我', sex: 'M', parents: ['f', 'm'], stepParents: ['sm'], spouses: ['wife'], birth: '1988', note: '' },
+      { id: 'wife', name: '妻子', sex: 'F', parents: ['wf', 'wm'], spouses: ['me'], birth: '1990', note: '' },
+      { id: 'cou', name: '堂弟', sex: 'M', parents: ['un', 'au'], spouses: [], birth: '1992', note: '' }
+    ];
+    mainId = 'me';
+    normalizeAll();
+    afterChange('示例已载入');
+    setTimeout(fitView, 40);
+  }
+
+  /* ================= 初始化与事件 ================= */
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._tid);
+    t._tid = setTimeout(function () { t.classList.remove('show'); }, 1600);
+  }
+
+  function closestNodeId(el) {
+    var cur = el;
+    while (cur && cur !== document.getElementById('treeSvg')) {
+      if (cur.getAttribute && cur.getAttribute('data-nodeid')) return cur.getAttribute('data-nodeid');
+      if (cur.classList && cur.classList.contains('tnode')) return cur.getAttribute('data-nodeid');
+      cur = cur.parentNode;
+    }
+    return null;
+  }
+
+  function bind() {
+    initPickers();
+    var canvas = document.getElementById('canvasWrap');
+    var svg = document.getElementById('treeSvg');
+    var drag = null;
+
+    // 滚轮缩放
+    canvas.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var r = canvas.getBoundingClientRect();
+      zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    }, { passive: false });
+
+    // 拖拽：命中卡片则拖动该节点（网图自由 / 树形同代水平），否则平移画布
+    canvas.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return;
+      var id = closestNodeId(e.target);
+      if (id) {
+        drag = { mode: 'node', id: id, x: e.clientX, y: e.clientY, moved: 0 };
+      } else {
+        drag = { mode: 'pan', x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty, moved: 0 };
+      }
+    });
+    window.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      drag.moved = Math.max(drag.moved, Math.abs(dx) + Math.abs(dy));
+      if (drag.moved > 4) {
+        canvas.classList.add('dragging');
+        if (drag.mode === 'pan') {
+          view.tx = drag.tx + dx;
+          view.ty = drag.ty + dy;
+          applyView();
+        } else {
+          moveNode(drag.id, dx / view.k, dy / view.k);
+          drag.x = e.clientX; drag.y = e.clientY;   // 增量基准重置，避免累积漂移
+        }
+      }
+    });
+    window.addEventListener('mouseup', function () {
+      if (!drag) return;
+      var wasDrag = drag.moved > 4;
+      var wasNode = drag.mode === 'node';
+      drag = null;
+      canvas.classList.remove('dragging');
+      if (wasDrag) {
+        if (wasNode) saveManualLayout();
+        suppressClick = true; setTimeout(function () { suppressClick = false; }, 0);
+      }
+    });
+
+    // 节点点击
+    var suppressClick = false;
+    var touchMoved = false;
+    svg.addEventListener('click', function (e) {
+      if (suppressClick || touchMoved) { suppressClick = false; touchMoved = false; return; }
+      var id = closestNodeId(e.target);
+      if (id) { e.stopPropagation(); showNodeMenu(id, e.clientX, e.clientY); return; }
+      hideMenu();
+    });
+
+    // 触摸：单指平移/拖节点、双指捏合缩放（移动端）
+    var touchState = null;
+    canvas.addEventListener('touchstart', function (e) {
+      touchMoved = false;
+      if (e.touches.length === 1) {
+        var t = e.touches[0];
+        var nid = closestNodeId(t.target);
+        if (nid) {
+          touchState = { mode: 'node', id: nid, x: t.clientX, y: t.clientY };
+        } else {
+          touchState = { mode: 'pan', x: t.clientX, y: t.clientY, tx: view.tx, ty: view.ty };
+        }
+      } else if (e.touches.length === 2) {
+        var a = e.touches[0], b = e.touches[1];
+        touchState = {
+          mode: 'pinch',
+          dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+          cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2
+        };
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchmove', function (e) {
+      if (!touchState) return;
+      e.preventDefault();
+      var r = canvas.getBoundingClientRect();
+      if (touchState.mode === 'node' && e.touches.length === 1) {
+        var t = e.touches[0];
+        moveNode(touchState.id, (t.clientX - touchState.x) / view.k, (t.clientY - touchState.y) / view.k);
+        touchState.x = t.clientX; touchState.y = t.clientY;
+        touchMoved = true;
+        return;
+      }
+      if (touchState.mode === 'pan' && e.touches.length === 1) {
+        var t2 = e.touches[0];
+        var ddx = t2.clientX - touchState.x, ddy = t2.clientY - touchState.y;
+        if (Math.abs(ddx) + Math.abs(ddy) > 6) touchMoved = true;
+        view.tx = touchState.tx + ddx;
+        view.ty = touchState.ty + ddy;
+        applyView();
+      } else if (e.touches.length === 2) {
+        var a = e.touches[0], b = e.touches[1];
+        var dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        var cx = (a.clientX + b.clientX) / 2 - r.left, cy = (a.clientY + b.clientY) / 2 - r.top;
+        var factor = dist / (touchState.dist || dist);
+        var k2 = clamp(view.k * factor, 0.18, 3);
+        var r2 = k2 / view.k;
+        view.tx = cx - (cx - view.tx) * r2;
+        view.ty = cy - (cy - view.ty) * r2;
+        view.k = k2;
+        touchState.dist = dist;
+        applyView();
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchend', function (e) {
+      if (e.touches.length === 0) {
+        if (touchState && touchState.mode === 'node') saveManualLayout();
+        touchState = null;
+      } else if (e.touches.length === 1) {
+        var t = e.touches[0];
+        touchState = { mode: 'pan', x: t.clientX, y: t.clientY, tx: view.tx, ty: view.ty };
+      }
+    });
+
+    // 菜单操作
+    document.getElementById('nodeMenu').addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('button') : null;
+      if (!btn) return;
+      var act = btn.getAttribute('data-act'), id = btn.getAttribute('data-id');
+      hideMenu();
+      if (act === 'child') showAddChild(id);
+      else if (act === 'spouse') showAddSpouse(id);
+      else if (act === 'father') showAddParent(id, 'M');
+      else if (act === 'mother') showAddParent(id, 'F');
+      else if (act === 'stepfather') showAddStepParent(id, 'M');
+      else if (act === 'stepmother') showAddStepParent(id, 'F');
+      else if (act === 'center') centerOnPerson(id);
+      else if (act === 'edit') showEdit(id);
+      else if (act === 'del') deleteMember(id);
+    });
+
+    document.addEventListener('mousedown', function (e) {
+      var menu = document.getElementById('nodeMenu');
+      if (menu.style.display !== 'none' && !menu.contains(e.target)) hideMenu();
+    });
+
+    // 缩放按钮
+    document.querySelector('.zoombar').addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button') : null;
+      if (!b) return;
+      var a = b.getAttribute('data-zoom');
+      var wrap = document.getElementById('canvasWrap');
+      if (a === 'in') zoomAt(wrap.clientWidth / 2, wrap.clientHeight / 2, 1.2);
+      else if (a === 'out') zoomAt(wrap.clientWidth / 2, wrap.clientHeight / 2, 1 / 1.2);
+      else if (a === 'fit') fitView();
+      else if (a === 'reset') { view.k = 1; view.tx = 0; view.ty = 0; applyView(); }
+    });
+
+    // 成员列表
+    var list = document.getElementById('memberGroups');
+    list.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.dataset && t.dataset.edit) return showEdit(t.dataset.edit);
+      if (t.dataset && t.dataset.del) return deleteMember(t.dataset.del);
+      if (t.dataset && t.dataset.focus) {
+        var g = t.closest('.gen-group');
+        if (g) { openGens[Number(g.getAttribute('data-gen'))] = true; }
+        centerOnPerson(t.dataset.focus);
+        return;
+      }
+    });
+    document.getElementById('memberSearch').addEventListener('input', function () {
+      renderMemberGroups();
+    });
+    document.getElementById('btn-expand-all').addEventListener('click', function () {
+      document.querySelectorAll('#memberGroups .gen-group').forEach(function (g) {
+        g.classList.add('open');
+        openGens[Number(g.getAttribute('data-gen'))] = true;
+      });
+    });
+    document.getElementById('btn-collapse-all').addEventListener('click', function () {
+      document.querySelectorAll('#memberGroups .gen-group').forEach(function (g) {
+        g.classList.remove('open');
+        openGens[Number(g.getAttribute('data-gen'))] = false;
+      });
+    });
+
+    // 弹窗
+    document.getElementById('btn-save').addEventListener('click', saveMember);
+    document.getElementById('btn-cancel').addEventListener('click', closeModal);
+    document.getElementById('modal-x').addEventListener('click', closeModal);
+    document.getElementById('modal-mask').addEventListener('click', closeModal);
+    document.getElementById('f-deceased').addEventListener('change', function () {
+      document.getElementById('f-death-wrap').classList.toggle('hidden', !this.checked);
+    });
+
+    document.getElementById('btn-add-root').addEventListener('click', showAddRoot);
+    document.getElementById('btn-relayout').addEventListener('click', function () {
+      netPos = {}; treeOffset = {}; netLayoutCache = null;
+      saveManualLayout();
+      renderAll({ fit: true });
+      toast('已重新布局（清除手动调整）');
+    });
+    var vt = document.getElementById('viewToggle');
+    if (vt) vt.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button[data-view]') : null;
+      if (!b) return;
+      var v = b.getAttribute('data-view');
+      if (v === viewMode) return;
+      viewMode = v;
+      document.querySelectorAll('#viewToggle button').forEach(function (x) {
+        x.classList.toggle('active', x.getAttribute('data-view') === v);
+      });
+      renderAll({ fit: true });
+    });
+    document.getElementById('btn-rel').addEventListener('click', doRelation);
+
+    // 数据
+    document.getElementById('btn-export').addEventListener('click', function () {
+      var blob = new Blob([JSON.stringify(persons, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      var d = new Date();
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      a.href = URL.createObjectURL(blob);
+      a.download = 'family-tree-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.json';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      toast('已导出');
+    });
+    document.getElementById('btn-export-png').addEventListener('click', exportPNG);
+    document.getElementById('btn-export-svg').addEventListener('click', exportSVG);
+    document.getElementById('btn-import').addEventListener('click', function () {
+      document.getElementById('file-import').click();
+    });
+    document.getElementById('file-import').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        try {
+          var data = JSON.parse(rd.result);
+          var arr = Array.isArray(data) ? data : (data && Array.isArray(data.persons) ? data.persons : null);
+          if (!arr) throw new Error('格式错误');
+          if (!confirm('导入会覆盖当前数据（当前 ' + persons.length + ' 人 → 导入 ' + arr.length + ' 人）。继续？')) return;
+          persons = arr;
+          normalizeAll();
+          save();
+          renderAll({ fit: true });
+          toast('已导入 ' + persons.length + ' 人');
+        } catch (err) {
+          alert('导入失败：' + err.message);
+        }
+      };
+      rd.readAsText(f, 'utf-8');
+      e.target.value = '';
+    });
+    document.getElementById('btn-sample').addEventListener('click', loadSample);
+    document.getElementById('btn-clear').addEventListener('click', function () {
+      if (!persons.length) return;
+      if (!confirm('确定清空全部 ' + persons.length + ' 位成员？此操作不可撤销，建议先导出备份。')) return;
+      persons = [];
+      afterChange('已清空');
+    });
+
+    // 视图尺寸变化后重排版
+    window.addEventListener('resize', function () {
+      clearTimeout(bind._rt);
+      bind._rt = setTimeout(function () { if (lastLayout) fitView(); }, 160);
+    });
+
+    // 诊断角标
+    document.getElementById('buildBadge').addEventListener('click', function () {
+      var info = {
+        build: this.getAttribute('data-build') || 'unknown',
+        members: persons.length,
+        generations: (function () { try { return computeGenerations(); } catch (e) { return 'ERR'; } })(),
+        nodes: document.querySelectorAll('#treeSvg .tnode').length,
+        layoutW: lastLayout ? Math.round(lastLayout.w) : 0,
+        layoutH: lastLayout ? Math.round(lastLayout.h) : 0,
+        zoom: view.k,
+        lastError: window.__lastError || null
+      };
+      var txt = JSON.stringify(info, null, 1);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function () { toast('诊断信息已复制'); }, function () { alert(txt); });
+      } else { alert(txt); }
+    });
+  }
+
+  function init() {
+    window.__lastError = null;
+    window.addEventListener('error', function (e) {
+      window.__lastError = (e.message || 'error') + ' @' + (e.filename || '') + ':' + (e.lineno || 0);
+      var b = document.getElementById('buildBadge');
+      if (b) { b.textContent = 'JS 错误 · 点此复制'; b.style.color = '#d33'; b.style.borderColor = '#d33'; }
+    });
+    load();
+    loadManualLayout();
+    bind();
+    renderAll({ fit: true });
+    setTimeout(fitView, 80);
+  }
+
+  // 暴露少量内部供测试
+  window.__ft = {
+    getPersons: function () { return persons; },
+    computeGenerations: computeGenerations,
+    computeLayout: computeLayout,
+    computeNetLayout: computeNetLayout,
+    setViewMode: function (v) { viewMode = v; },
+    getViewMode: function () { return viewMode; },
+    termAB: termAB,
+    fitView: fitView,
+    getView: function () { return view; }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
